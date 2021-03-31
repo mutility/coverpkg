@@ -1,0 +1,72 @@
+name: CoverPkg
+author: Michael Urman
+description: Calculates cross-package test coverage of a go module
+branding:
+  icon: percent
+  color: yellow
+
+inputs:
+  excludes:
+    description: comma-separated list of package tokens to exclude
+    required: false
+    default: 'gen'
+  packages:
+    description: comma-separated list of packages to consider
+    required: false
+    default: '.'
+  groupby:
+    description: one of file, package, root, or module
+    required: false
+    default: package
+  nopull:
+    description: skip pull
+    required: false
+    default: ''
+  nopush:
+    description: skip push
+    required: false
+    default: ''
+  remote:
+    description: name of git remote
+    required: false
+    default: 'origin'
+  coverpkgref:
+    description: notes ref name
+    required: false
+    default: 'coverpkg'
+  token:
+    description: github api token, required for commenting on PR
+    required: false
+    default: ''
+  comment:
+    description: disposition of comments, one of none, update, replace, or append
+    required: false
+    default: 'none'
+
+outputs:
+  summary-txt:
+    description: Summarizes coverage of module in ascii text
+  summary-md:
+    description: Summarizes coverage of module in markdown
+  pushed-coverage:
+    description: Set to 'true' if head coverage was pushed back to origin
+  found-base:
+    description: Set to 'true' if a pull-request base coverage was found
+  comment-id:
+    description: Set to id of a posted or updated PR comment
+
+runs:
+  using: 'composite'
+  steps:
+    - run: go run ./cmd/coverpkg-gha ${{ github.event_name }}
+      shell: bash
+      env:
+        INPUT_EXCLUDES: ${{ inputs.excludes }}
+        INPUT_PACKAGES: ${{ inputs.packages }}
+        INPUT_GROUPBY: ${{ inputs.groupby }}
+        INPUT_NOPULL: ${{ inputs.nopull }}
+        INPUT_NOPUSH: ${{ inputs.nopush }}
+        INPUT_REMOTE: ${{ inputs.remote }}
+        INPUT_COVERPKGREF: ${{ inputs.coverpkgref }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_TOKEN: ${{ inputs.token }}
