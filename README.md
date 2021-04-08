@@ -2,6 +2,8 @@
 
 CoverPkg uses the semi-recent `go test -coverpkg` option to gather cross-package test coverage information, then parses and aggregates it into consumable reports.
 
+[![Coverage](https://github.com/mutility/coverpkg/actions/workflows/cover.yaml/badge.svg)](https://github.com/mutility/coverpkg/actions/workflows/cover.yaml)
+
 ## Command-line use
 
 On the command line, use `coverpkg calc` or `coverpkg diff` to calculate and display coverage. Configuration options can be provided by flag, and sometimes by environment variable.
