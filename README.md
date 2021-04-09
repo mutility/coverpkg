@@ -9,7 +9,7 @@ CoverPkg uses the semi-recent `go test -coverpkg` option to gather cross-package
 On the command line, use `coverpkg calc` or `coverpkg diff` to calculate and display coverage. Configuration options can be provided by flag, and sometimes by environment variable.
 
 ```bash
-% go run ./cmd/coverpkg calc -by root -f ascii
+% go run ./cmd/coverpkg calc -g root -f ascii
 github.com/mutility/coverpkg/cmd/...:        0.00%    0 of 281
 github.com/mutility/coverpkg/internal/...:  37.88%  150 of 396
 <all>:                                      22.16%  150 of 677
@@ -17,7 +17,7 @@ github.com/mutility/coverpkg/internal/...:  37.88%  150 of 396
 
 ### Installation
 
-`% go install github.com/mutility/coverpkg`
+`% go install github.com/mutility/coverpkg/cmd/coverpkg@latest`
 
 ## GitHub Actions
 

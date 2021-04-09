@@ -115,20 +115,20 @@ func ReportTo(w io.Writer, c PathDetailer) {
 		// for ChangeDetailers, include old only if nonzero base
 
 		if pctBase > 0 {
-			fmt.Fprintf(w, "%-*s  %5.2f%%  %*d of %*d  %+6.2f%%  (was %5.2f%%  %*d of %d)\n",
+			fmt.Fprintf(w, "%-*s %6.2f%%  %*d of %*d %+7.2f%%  (was %6.2f%%  %*d of %d)\n",
 				maxName+5, pkg,
 				pctHead, lenHC, hd.Covered, lenHT, hd.Total,
 				pctHead-pctBase,
 				pctBase, lenBC, bd.Covered, bd.Total,
 			)
 		} else if d != nil {
-			fmt.Fprintf(w, "%-*s  %5.2f%%  %*d of %*d  %+6.2f%%\n",
+			fmt.Fprintf(w, "%-*s %6.2f%%  %*d of %*d %+7.2f%%\n",
 				maxName+5, pkg,
 				pctHead, lenHC, hd.Covered, lenHT, hd.Total,
 				pctHead-pctBase,
 			)
 		} else {
-			fmt.Fprintf(w, "%-*s  %5.2f%%  %*d of %d\n",
+			fmt.Fprintf(w, "%-*s %6.2f%%  %*d of %d\n",
 				maxName+5, pkg,
 				pctHead, lenHC, hd.Covered, hd.Total,
 			)
