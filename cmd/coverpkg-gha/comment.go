@@ -33,7 +33,7 @@ func doComment(ctx diag.Context, event *GitHubEvent, detail *details) (int64, er
 	switch cfg.PRComment {
 	case "replace":
 		comment, err = prcomment.post(ctx, body)
-		if err == nil {
+		if err == nil && oldComment != nil {
 			prcomment.delete(ctx, oldComment)
 		}
 	case "append":
