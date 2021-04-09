@@ -221,7 +221,7 @@ func (ghe GitHubEvent) lookup(log diag.Interface, path string) interface{} {
 			for k := range v {
 				keys = append(keys, k)
 			}
-			diag.Debug(log, "lookup", p, "of", keys)
+			// diag.Debug(log, "lookup", p, "of", keys)
 			if child, ok := v[p]; ok {
 				src = child
 				continue

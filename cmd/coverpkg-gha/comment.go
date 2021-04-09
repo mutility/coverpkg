@@ -89,6 +89,7 @@ func (gh *issuecomments) find(ctx diag.Context) *github.IssueComment {
 			ctx, gh.owner, gh.repo, gh.issue, opt)
 		if err != nil {
 			diag.Warning(ctx, "reading comments:", err)
+			return nil
 		}
 		for _, comment := range comments {
 			if strings.Contains(comment.GetBody(), "<!-- coverpkg-tag -->") {
