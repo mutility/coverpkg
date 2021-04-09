@@ -27,10 +27,11 @@ type config struct {
 	// List of packages to report on
 	Packages cli.StringSlice
 
-	Debug       bool
-	GroupBy     string // aggregation level, "file", "package", "root" or "module"
-	Format      string // format of output, "ascii" or "markdown"
-	CoverageRef string // Namespace for coverpkg notes
+	Debug        bool
+	GroupBy      string // aggregation level, "file", "package", "root" or "module"
+	Format       string // format of output, "ascii" or "markdown"
+	CoverageRef  string // Namespace for coverpkg notes
+	CoverProfile string // name of stored profile data
 }
 
 var cfg = config{
@@ -45,6 +46,32 @@ func (cfg config) Context(c *cli.Context) diag.Context {
 		log = diag.NewDebug(c.App.Writer)
 	}
 	return diag.WithContext(context.Background(), log)
+}
+
+type errInvalidGroupBy string
+
+func (e errInvalidGroupBy) Error() string {
+	return fmt.Sprintf("group-by value '%s'; must be file, package, root, or module", string(e))
+}
+
+type errInvalidFormat string
+
+func (e errInvalidFormat) Error() string {
+	return fmt.Sprintf("format value '%s'; must be ascii or markdown", string(e))
+}
+
+func validateGF(*cli.Context) error {
+	switch cfg.GroupBy {
+	case "file", "package", "root", "module":
+	default:
+		return errInvalidGroupBy(cfg.GroupBy)
+	}
+	switch cfg.Format {
+	case "md", "markdown", "txt", "ascii":
+	default:
+		return errInvalidFormat(cfg.Format)
+	}
+	return nil
 }
 
 func main() {
@@ -71,6 +98,29 @@ func main() {
 		}
 		return f
 	}
+
+	groupBy := &cli.StringFlag{
+		Name:        "g",
+		Usage:       "specify grouping: file, package, root, or module",
+		EnvVars:     []string{"COVERPKG_BY"},
+		Destination: &cfg.GroupBy,
+		Value:       "package",
+	}
+	formatAs := &cli.StringFlag{
+		Name:        "f",
+		Usage:       "specify format: <ascii> art or <markdown>",
+		EnvVars:     []string{"COVERPKG_FMT"},
+		Destination: &cfg.Format,
+		Value:       "ascii",
+	}
+	coverProfile := &cli.PathFlag{
+		Name:        "coverprofile",
+		Aliases:     []string{"p"},
+		Usage:       "specify coverprofile file",
+		Required:    true,
+		Destination: &cfg.CoverProfile,
+	}
+
 	app := &cli.App{
 		Name:     "coverpkg",
 		HelpName: "coverpkg",
@@ -90,9 +140,11 @@ func main() {
 				Name:   "calc",
 				Action: runCalc,
 				Usage:  "calculate and display code coverage",
+				Before: validateGF,
+
 				Flags: []cli.Flag{
-					stringVar(&cfg.GroupBy, "g", "specify grouping: file, package, root, or module", "COVERPKG_BY"),
-					stringVar(&cfg.Format, "f", "specify format: <ascii> art or <markdown>", "COVERPKG_FMT"),
+					groupBy,
+					formatAs,
 					boolVar(&cfg.StoreCoverage, "store", "store coverage info to git, useful to enable diff"),
 					stringVar(&cfg.CoverageRef, "coverpkg-ref", "specify an alternate notes ref name", "INPUT_COVERPKGREF"),
 				},
@@ -101,15 +153,36 @@ func main() {
 				Name:   "diff",
 				Action: runDiff,
 				Usage:  "calculate and display code coverage and change",
+				Before: validateGF,
 
 				Flags: []cli.Flag{
-					stringVar(&cfg.GroupBy, "g", "specify grouping: file, package, root, or module", "COVERPKG_BY"),
-					stringVar(&cfg.Format, "f", "specify format: <ascii> art or <markdown>", "COVERPKG_FMT"),
-
+					groupBy,
+					formatAs,
 					stringVar(&cfg.BaseRef, "base-ref", "specify the base branch or commit hash"),
 					pathVar(&cfg.BaseProfile, "base-coverprofile", "specify the base coverprofile"),
 
 					stringVar(&cfg.CoverageRef, "coverpkg-ref", "specify an alternate notes ref name", "INPUT_COVERPKGREF"),
+				},
+			},
+			{
+				Name:   "test",
+				Action: runCover,
+				Usage:  "Run tests, capturing profile",
+
+				Flags: []cli.Flag{
+					coverProfile,
+				},
+			},
+			{
+				Name:   "show",
+				Action: runShow,
+				Usage:  "Display existing profile",
+				Before: validateGF,
+
+				Flags: []cli.Flag{
+					groupBy,
+					formatAs,
+					coverProfile,
 				},
 			},
 		},
@@ -156,6 +229,58 @@ func runCalc(c *cli.Context) error {
 	if cfg.StoreCoverage {
 		ref := notes.RemoteRef{Ref: cfg.CoverageRef}
 		return notes.Store(ctx, ref, filecov)
+	}
+
+	return nil
+}
+
+// runCover will capture and save a coverprofile
+func runCover(c *cli.Context) error {
+	ctx := cfg.Context(c)
+	_, err := coverage.CollectFiles(ctx, &coverage.TestOptions{
+		CoverProfile: cfg.CoverProfile,
+		Excludes:     cfg.Excludes.Value(),
+		Packages:     cfg.Packages.Value(),
+		Stdout:       c.App.Writer,
+		Stderr:       c.App.ErrWriter,
+	})
+	return err
+}
+
+// runShow will show coverage for a coverprofile profile
+func runShow(c *cli.Context) error {
+	ctx := cfg.Context(c)
+
+	stmts, err := coverage.LoadProfile(ctx, cfg.CoverProfile, &coverage.TestOptions{
+		Excludes: cfg.Excludes.Value(),
+		Packages: cfg.Packages.Value(),
+	})
+	if err != nil {
+		return err
+	}
+
+	var cov coverage.PathDetailer
+	switch cfg.GroupBy {
+	case "file":
+		cov = coverage.ByFiles(ctx, stmts)
+	case "package":
+		cov = coverage.ByPackage(ctx, stmts)
+	case "root":
+		cov = coverage.ByRoot(ctx, stmts)
+	case "module":
+		cov = coverage.ByModule(ctx, stmts)
+	}
+
+	switch cfg.Format {
+	case "markdown":
+		fmt.Print(coverage.ReportMD(cov))
+	default:
+		fmt.Print(coverage.Report(cov))
+	}
+
+	if cfg.StoreCoverage {
+		ref := notes.RemoteRef{Ref: cfg.CoverageRef}
+		return notes.Store(ctx, ref, stmts)
 	}
 
 	return nil
