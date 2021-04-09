@@ -33,7 +33,7 @@ func doComment(ctx diag.Context, event *GitHubEvent, detail *details) (int64, er
 	switch cfg.PRComment {
 	case "replace":
 		comment, err = prcomment.post(ctx, body)
-		if err == nil {
+		if err == nil && oldComment != nil {
 			prcomment.delete(ctx, oldComment)
 		}
 	case "append":
@@ -89,6 +89,7 @@ func (gh *issuecomments) find(ctx diag.Context) *github.IssueComment {
 			ctx, gh.owner, gh.repo, gh.issue, opt)
 		if err != nil {
 			diag.Warning(ctx, "reading comments:", err)
+			return nil
 		}
 		for _, comment := range comments {
 			if strings.Contains(comment.GetBody(), "<!-- coverpkg-tag -->") {

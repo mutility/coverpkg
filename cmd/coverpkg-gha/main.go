@@ -194,9 +194,8 @@ retrieved.`,
 
 		Commands: []*cli.Command{
 			{
-				Name: "nop",
+				Name: "schedule",
 				Aliases: []string{
-					"schedule",
 					"check_run",
 					"check_suite",
 					"create",
@@ -319,9 +318,7 @@ func runPush(c *cli.Context) error {
 		return err
 	}
 
-	txt := coverage.Report(cov)
-	gha.Debug(txt)
-	gha.SetOutput("summary-txt", txt)
+	gha.SetOutput("summary-txt", coverage.Report(cov))
 	gha.SetOutput("summary-md", coverage.ReportMD(cov))
 
 	if cfg.NoPushCoverage {
