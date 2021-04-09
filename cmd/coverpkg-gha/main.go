@@ -194,10 +194,47 @@ retrieved.`,
 
 		Commands: []*cli.Command{
 			{
-				Name:   "push",
-				Before: requireEventPath,
-				Action: runPush,
-				Usage:  "calculate and save code coverage for the head commit",
+				Name: "nop",
+				Aliases: []string{
+					"schedule",
+					"check_run",
+					"check_suite",
+					"create",
+					"delete",
+					"deployment",
+					"deployment_status",
+					"fork",
+					"gollum",
+					"issue_comment",
+					"issues",
+					"label",
+					"milestone",
+					"page_build",
+					"project",
+					"project_card",
+					"project_column",
+					"public",
+					"pull_request_review",
+					"pull_request_review_comment",
+					"registry_package",
+					"release",
+					"status",
+					"watch",
+					"workflow_run",
+				},
+				Usage: "Does nothing; exits without an error for unsupported GitHub Action events.",
+				Action: func(c *cli.Context) error {
+					gha, _ := cfg.GitHubContext(c)
+					gha.Debug("Unsupported event")
+					return nil
+				},
+			},
+			{
+				Name:    "push",
+				Aliases: []string{"workflow_dispatch", "repository_dispatch"},
+				Before:  requireEventPath,
+				Action:  runPush,
+				Usage:   "calculate and save code coverage for the head commit",
 				Description: "Calculates, saves, and pushes code coverage information for the head commit.\n" +
 					"Requires the following:\n\n" +
 					"  * The desired commit has been checked out\n" +
@@ -214,10 +251,11 @@ retrieved.`,
 				},
 			},
 			{
-				Name:   "pull_request",
-				Before: requireEventPath,
-				Action: runPR,
-				Usage:  "calculate and display code coverage (and change) for the head commit",
+				Name:    "pull_request",
+				Aliases: []string{"pull_request_target"},
+				Before:  requireEventPath,
+				Action:  runPR,
+				Usage:   "calculate and display code coverage (and change) for the head commit",
 
 				Flags: []cli.Flag{
 					stringVar(&cfg.APIToken, "api-token", "specify the token used for commenting on pull requests", "INPUT_TOKEN"),

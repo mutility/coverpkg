@@ -23,7 +23,7 @@ github.com/mutility/coverpkg/internal/...:  37.88%  150 of 396
 
 As an action, coverpkg will store coverage information in [git notes](https://git-scm.com/docs/git-notes). This requires an extra pull and push during the default `push` support, and an extra pull during the `pull_request` support. Pull requests can be commented on to reveal their state of coverage, and if base information is available, the changes. See `comment` and `token` in *Options* below.
 
-We suggest a workflow similar to the following. In particular, coverpkg supports running on push and pull_request, and it requires go and a copy of your code checked out to what you want to test. For pull requests, it requires a token such as the `${{ github.token }}` to create and/or update comments. For pushes, it requires the ability to push back to your repository, so avoid specifying `persist-credentials: false` on your `actions/checkout@v2`. Without push support, the pull_request comment can only report the current coverage.
+We suggest a workflow similar to the following. In particular, coverpkg supports running on `push` and `pull_request`, and it requires go and a copy of your code checked out to what you want to test. For pull requests, it requires a token such as the `${{ github.token }}` to create and/or update comments. For pushes, it requires the ability to push back to your repository, so avoid specifying `persist-credentials: false` on your `actions/checkout@v2`. Without push support, the pull_request comment can only report the current coverage.
 
 ```yaml
 name: 'Coverage'
@@ -53,6 +53,10 @@ jobs:
         token: ${{ github.token }}
         comment: update
 ```
+
+### Events
+
+The coverpkg action primarily supports `push` and `pull_request` events. In addition, it supports `pull_request_target` as an alias to `pull_request`, and `workflow_dispatch` and `repository_dispatch` act like `push`. All other events log a debug message and succeed so you don't absolutely have to filter when you invoke coverpkg.
 
 ### Options
 
