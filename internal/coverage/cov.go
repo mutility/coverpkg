@@ -374,9 +374,11 @@ func ByModule(log diag.Interface, pkgs EachPackager) ModuleData {
 }
 
 type TestOptions struct {
-	Flags    []string
-	Packages []string
-	Excludes []string
+	CoverProfile   string
+	Flags          []string
+	Packages       []string
+	Excludes       []string
+	Stdout, Stderr io.Writer
 }
 
 func (o *TestOptions) excludes(path string) bool {
@@ -397,11 +399,15 @@ var DefaultTestOptions = &TestOptions{
 
 // coverprofile collects a coverprofile and returns the filename
 func coverprofile(log diag.Interface, options *TestOptions) (string, error) {
-	prof, err := os.CreateTemp("", "covpkg*")
-	if err != nil {
-		return "", err
+	profile := options.CoverProfile
+	if profile == "" {
+		prof, err := os.CreateTemp("", "covpkg*")
+		if err != nil {
+			return "", err
+		}
+		prof.Close()
+		profile = prof.Name()
 	}
-	prof.Close()
 
 	if options == nil {
 		options = DefaultTestOptions
@@ -409,7 +415,7 @@ func coverprofile(log diag.Interface, options *TestOptions) (string, error) {
 	if len(options.Packages) == 0 {
 		options.Packages = append(options.Packages, ".")
 	}
-	diag.Debug(log, "Creating profile in:", prof.Name(), "packages", options.Packages)
+	diag.Debug(log, "Creating profile in:", profile, "packages", options.Packages)
 
 	pkgs := make([]string, len(options.Packages))
 	for i, arg := range options.Packages {
@@ -426,14 +432,21 @@ func coverprofile(log diag.Interface, options *TestOptions) (string, error) {
 		pkgs[i] = arg
 	}
 
-	diag.Debug(log, "run> go test -coverprofile", prof.Name(), "-coverpkg", strings.Join(pkgs, ","), strings.Join(pkgs, " "))
-	cmd := exec.Command("go", append([]string{"test", "-coverprofile", prof.Name(), "-coverpkg", strings.Join(pkgs, ",")}, pkgs...)...)
-	err = cmd.Run()
+	diag.Debug(log, "run> go test -coverprofile", profile, "-coverpkg", strings.Join(pkgs, ","), strings.Join(pkgs, " "))
+	cmd := exec.Command("go", append([]string{"test", "-coverprofile", profile, "-coverpkg", strings.Join(pkgs, ",")}, pkgs...)...)
+	if options.Stdout != nil {
+		cmd.Stdout = options.Stdout
+		fmt.Fprintln(options.Stdout, "go test -coverprofile", profile, "-coverpkg", strings.Join(pkgs, ","), strings.Join(pkgs, " "))
+	}
+	if options.Stderr != nil {
+		cmd.Stderr = options.Stderr
+	}
+	err := cmd.Run()
 	if err != nil {
-		os.Remove(prof.Name())
+		os.Remove(profile)
 		return "", fmt.Errorf("tests failed: %w", err)
 	}
-	return prof.Name(), nil
+	return profile, nil
 }
 
 type stmt struct {
