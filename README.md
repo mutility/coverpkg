@@ -50,8 +50,7 @@ jobs:
       id: coverpkg
       uses: mutility/coverpkg@v1
       with:
-        token: ${{ github.token }}
-        comment: update
+        comment: replace
 ```
 
 ### Events
