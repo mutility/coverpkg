@@ -58,7 +58,10 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - run: go run ./cmd/coverpkg-gha ${{ github.event_name }}
+    - run: go build ./cmd/coverpkg-gha
+      shell: bash
+      working-directory: ${{ github.action_path }}
+    - run: go run ${{ github.action_path }}/coverpkg-gha ${{ github.event_name }}
       shell: bash
       env:
         INPUT_EXCLUDES: ${{ inputs.excludes }}
