@@ -1,27 +1,18 @@
 package coverage
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/mutility/coverpkg/internal/diag"
+	"github.com/mutility/coverpkg/internal/diag/testdiag"
 )
-
-type testDiag testing.T
-
-func td(t *testing.T) diag.Context              { return diag.WithContext(context.Background(), (*testDiag)(t)) }
-func (d *testDiag) t() *testing.T               { return (*testing.T)(d) }
-func (d *testDiag) Debug(args ...interface{})   { d.t().Helper(); d.t().Log(args...) }
-func (d *testDiag) Warning(args ...interface{}) { d.t().Helper(); d.t().Log(args...) }
-func (d *testDiag) Error(args ...interface{})   { d.t().Helper(); d.t().Log(args...) }
 
 func TestLoadAgg(t *testing.T) {
 	const mod = "github.com/mutility/coverpkg"
 	const prof = "testdata/cover.prof"
 
-	ctx := td(t)
+	ctx := testdiag.Context(t)
 
 	st, err := LoadProfile(ctx, prof, DefaultTestOptions)
 	if err != nil {

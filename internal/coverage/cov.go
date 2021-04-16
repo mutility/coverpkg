@@ -100,8 +100,8 @@ func (fd FileData) Paths() []string {
 	return files
 }
 
-func (fd FileData) Detail(pkg string) Counts {
-	c := fd[pkg]
+func (fd FileData) Detail(path string) Counts {
+	c := fd[path]
 	return Counts{Covered: c.Covered, Total: c.Count}
 }
 
@@ -119,14 +119,16 @@ func (pd PackageData) EachModule(fn func(path string, count int, covered int)) {
 	}
 }
 
-func Diff(log diag.Interface, old, new EachPather) PathDelta {
+func Diff(log diag.Interface, old, new EachPather) ChangeDetailer {
 	var oldEach, newEach func(func(string, int, int))
 	oldPD, _ := old.(EachPackager)
 	newPD, _ := new.(EachPackager)
 	oldFD, _ := old.(EachFiler)
 	newFD, _ := new.(EachFiler)
 
+	isAggregate := true
 	if oldFD != nil && newFD != nil {
+		isAggregate = false
 		oldEach = oldFD.EachFile
 		newEach = newFD.EachFile
 	} else if oldPD != nil && newPD != nil {
@@ -162,6 +164,9 @@ func Diff(log diag.Interface, old, new EachPather) PathDelta {
 		cc.HeadCovered += covered
 		delta[path] = cc
 	})
+	if !isAggregate {
+		return FileDelta(delta)
+	}
 	return delta
 }
 
@@ -174,8 +179,8 @@ func (pd PackageData) Paths() []string {
 	return pkgs
 }
 
-func (pd PackageData) Detail(pkg string) Counts {
-	c := pd[pkg]
+func (pd PackageData) Detail(path string) Counts {
+	c := pd[path]
 	return Counts{Covered: c.Covered, Total: c.Count, IsAggregate: true}
 }
 
@@ -196,28 +201,47 @@ func (md ModuleData) Paths() []string {
 	return pkgs
 }
 
-func (md ModuleData) Detail(pkg string) Counts {
-	c := md[pkg]
+func (md ModuleData) Detail(path string) Counts {
+	c := md[path]
 	return Counts{Covered: c.Covered, Total: c.Count, IsAggregate: true}
 }
 
-func (pd PathDelta) Paths() []string {
-	pkgs := make([]string, 0, len(pd))
+func (pd FileDelta) Paths() []string {
+	files := make([]string, 0, len(pd))
 	for p := range pd {
-		pkgs = append(pkgs, string(p))
+		files = append(files, strings.TrimSuffix(p, "/"))
 	}
-	sort.Strings(pkgs)
-	return pkgs
+	sort.Strings(files)
+	return files
 }
 
-func (pd PathDelta) Detail(pkg string) Counts {
-	c := pd[pkg]
-	return Counts{Covered: c.HeadCovered, Total: c.HeadCount, IsAggregate: pkg != "."}
+func (pd FileDelta) Detail(path string) Counts {
+	c := pd[path]
+	return Counts{Covered: c.HeadCovered, Total: c.HeadCount, IsAggregate: false}
 }
 
-func (pd PathDelta) BaseDetail(pkg string) Counts {
-	c := pd[pkg]
-	return Counts{Covered: c.BaseCovered, Total: c.BaseCount, IsAggregate: pkg != "."}
+func (pd FileDelta) BaseDetail(path string) Counts {
+	c := pd[path]
+	return Counts{Covered: c.BaseCovered, Total: c.BaseCount, IsAggregate: false}
+}
+
+func (pd PathDelta) Paths() []string {
+	paths := make([]string, 0, len(pd))
+	for p := range pd {
+		paths = append(paths, strings.TrimSuffix(p, "/"))
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func (pd PathDelta) Detail(path string) Counts {
+	c := pd[path]
+	return Counts{Covered: c.HeadCovered, Total: c.HeadCount, IsAggregate: path != "."}
+}
+
+func (pd PathDelta) BaseDetail(path string) Counts {
+	c := pd[path]
+	return Counts{Covered: c.BaseCovered, Total: c.BaseCount, IsAggregate: path != "."}
 }
 
 func CollectStatements(ctx diag.Context, options *TestOptions) (StatementData, error) {
@@ -382,6 +406,9 @@ type TestOptions struct {
 }
 
 func (o *TestOptions) excludes(path string) bool {
+	if o == nil {
+		return false
+	}
 	for _, ex := range o.Excludes {
 		if strings.HasPrefix(path, ex+"/") ||
 			strings.Contains(path, "/"+ex+"/") {
@@ -488,7 +515,7 @@ func LoadProfile(ctx diag.Context, prof string, options *TestOptions) (Statement
 		return nil, err
 	}
 
-	stmts, err := readStatements(ctx, r, options)
+	stmts, err := ReadProfile(ctx, r, options)
 
 	if err := r.Close(); err != nil {
 		diag.Debug(ctx, "closing coverprofile:", err)
@@ -496,7 +523,8 @@ func LoadProfile(ctx diag.Context, prof string, options *TestOptions) (Statement
 	return stmts, err
 }
 
-func readStatements(ctx diag.Context, r io.Reader, options *TestOptions) (StatementData, error) {
+// ReadProfile loads statement coverage from a Reader.
+func ReadProfile(ctx diag.Context, r io.Reader, options *TestOptions) (StatementData, error) {
 	scan := bufio.NewScanner(r)
 	return scanStatements(ctx, scan, options)
 }
