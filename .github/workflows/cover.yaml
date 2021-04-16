@@ -25,5 +25,4 @@ jobs:
       id: coverpkg
       uses: ./.
       with:
-        token: ${{ github.token }}
         comment: replace
