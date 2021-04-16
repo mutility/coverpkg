@@ -37,7 +37,7 @@ inputs:
   token:
     description: github api token, required for commenting on PR
     required: false
-    default: ''
+    default: ${{ github.token }}
   comment:
     description: disposition of comments, one of none, update, replace, or append
     required: false
