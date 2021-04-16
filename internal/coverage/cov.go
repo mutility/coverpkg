@@ -406,6 +406,9 @@ type TestOptions struct {
 }
 
 func (o *TestOptions) excludes(path string) bool {
+	if o == nil {
+		return false
+	}
 	for _, ex := range o.Excludes {
 		if strings.HasPrefix(path, ex+"/") ||
 			strings.Contains(path, "/"+ex+"/") {
@@ -512,7 +515,7 @@ func LoadProfile(ctx diag.Context, prof string, options *TestOptions) (Statement
 		return nil, err
 	}
 
-	stmts, err := readStatements(ctx, r, options)
+	stmts, err := ReadProfile(ctx, r, options)
 
 	if err := r.Close(); err != nil {
 		diag.Debug(ctx, "closing coverprofile:", err)
@@ -520,7 +523,8 @@ func LoadProfile(ctx diag.Context, prof string, options *TestOptions) (Statement
 	return stmts, err
 }
 
-func readStatements(ctx diag.Context, r io.Reader, options *TestOptions) (StatementData, error) {
+// ReadProfile loads statement coverage from a Reader.
+func ReadProfile(ctx diag.Context, r io.Reader, options *TestOptions) (StatementData, error) {
 	scan := bufio.NewScanner(r)
 	return scanStatements(ctx, scan, options)
 }

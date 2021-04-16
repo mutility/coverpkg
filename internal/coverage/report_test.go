@@ -1,11 +1,13 @@
 package coverage_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/mutility/coverpkg/internal/coverage"
+	"github.com/mutility/coverpkg/internal/diag/testdiag"
 )
 
 type stmts struct {
@@ -159,5 +161,78 @@ func TestReport(t *testing.T) {
 				t.Errorf("reportmd (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestLoadDiffReport(t *testing.T) {
+	const a = `github.com/mutility/coverpkg/internal/testdata/fake.go:1.2,2.3 2 0`
+	const b = `github.com/mutility/coverpkg/internal/testdata/fake.go:1.2,2.3 2 1`
+
+	ctx := testdiag.Context(t)
+	sa, err := coverage.ReadProfile(ctx, strings.NewReader(a), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sb, err := coverage.ReadProfile(ctx, strings.NewReader(b), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		fa := coverage.ByFiles(ctx, sa)
+		fb := coverage.ByFiles(ctx, sb)
+		fd := coverage.Diff(ctx, fa, fb)
+		got := coverage.ReportMD(fd)
+		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+|:--|--:|--:|--:|--:|--:|
+github.com/mutility/coverpkg/internal/testdata/fake.go|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
+`
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("fmd (-want +got):\n%s", diff)
+		}
+	}
+	{
+		pa := coverage.ByPackage(ctx, sa)
+		pb := coverage.ByPackage(ctx, sb)
+		pd := coverage.Diff(ctx, pa, pb)
+		got := coverage.ReportMD(pd)
+		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+|:--|--:|--:|--:|--:|--:|
+github.com/mutility/coverpkg/internal/testdata/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
+`
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("pmd (-want +got):\n%s", diff)
+		}
+	}
+	{
+		ra := coverage.ByRoot(ctx, sa)
+		rb := coverage.ByRoot(ctx, sb)
+		rd := coverage.Diff(ctx, ra, rb)
+		got := coverage.ReportMD(rd)
+		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+|:--|--:|--:|--:|--:|--:|
+github.com/mutility/coverpkg/internal/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
+`
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("pmd (-want +got):\n%s", diff)
+		}
+	}
+	{
+		ma := coverage.ByModule(ctx, sa)
+		mb := coverage.ByModule(ctx, sb)
+		md := coverage.Diff(ctx, ma, mb)
+		got := coverage.ReportMD(md)
+		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+|:--|--:|--:|--:|--:|--:|
+github.com/mutility/coverpkg/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
+`
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("pmd (-want +got):\n%s", diff)
+		}
 	}
 }
