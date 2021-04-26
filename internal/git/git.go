@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/mutility/coverpkg/internal/diag"
+	"github.com/mutility/diag"
 )
 
 func Config(ctx diag.Context, params ...string) (string, error) {

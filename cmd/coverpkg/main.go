@@ -8,8 +8,8 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/mutility/coverpkg/internal/coverage"
-	"github.com/mutility/coverpkg/internal/diag"
 	"github.com/mutility/coverpkg/internal/notes"
+	"github.com/mutility/diag"
 )
 
 type config struct {
@@ -41,9 +41,11 @@ var cfg = config{
 }
 
 func (cfg config) Context(c *cli.Context) diag.Context {
-	var log diag.Interface = diag.New(c.App.Writer)
+	var log diag.Interface
 	if cfg.Debug {
-		log = diag.NewDebug(c.App.Writer)
+		log = diag.NewWriterDebug(c.App.Writer)
+	} else {
+		log = diag.NewWriter(c.App.Writer)
 	}
 	return diag.WithContext(context.Background(), log)
 }

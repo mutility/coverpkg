@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/mutility/coverpkg/internal/diag"
+	"github.com/mutility/diag"
 )
 
 func TestFullDiagInterface(t *testing.T) {

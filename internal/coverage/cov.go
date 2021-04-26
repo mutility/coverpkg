@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mutility/coverpkg/internal/diag"
+	"github.com/mutility/diag"
 )
 
 var ErrNoPackages = errors.New("no packages specified")

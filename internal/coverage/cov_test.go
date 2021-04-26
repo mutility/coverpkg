@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/mutility/coverpkg/internal/diag/testdiag"
+	"github.com/mutility/diag/testdiag"
 )
 
 func TestLoadAgg(t *testing.T) {

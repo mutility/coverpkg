@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mutility/coverpkg/internal/diag"
+	"github.com/mutility/diag"
 )
 
 type GitHubAction struct {
