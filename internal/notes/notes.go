@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mutility/coverpkg/internal/diag"
 	"github.com/mutility/coverpkg/internal/git"
+	"github.com/mutility/diag"
 )
 
 type RemoteRef struct {

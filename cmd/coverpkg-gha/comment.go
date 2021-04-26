@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-github/v34/github"
 	"golang.org/x/oauth2"
 
-	"github.com/mutility/coverpkg/internal/diag"
+	"github.com/mutility/diag"
 )
 
 func doComment(ctx diag.Context, event *GitHubEvent, detail *details) (int64, error) {

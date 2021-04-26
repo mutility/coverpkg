@@ -10,8 +10,8 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/mutility/coverpkg/internal/coverage"
-	"github.com/mutility/coverpkg/internal/diag"
 	"github.com/mutility/coverpkg/internal/notes"
+	"github.com/mutility/diag"
 )
 
 type errInvalidGroupBy string

@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/mutility/coverpkg/internal/coverage"
-	"github.com/mutility/coverpkg/internal/diag/testdiag"
+	"github.com/mutility/diag/testdiag"
 )
 
 type stmts struct {
