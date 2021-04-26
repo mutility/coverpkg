@@ -188,7 +188,10 @@ func ReportMDTo(w io.Writer, c PathDetailer) {
 			pkg = "**Total**"
 		}
 		if bd.Total > 0 {
-			hpct := float64(100*hd.Covered) / float64(hd.Total)
+			hpct := 0.0
+			if hd.Total > 0 {
+				hpct = float64(100*hd.Covered) / float64(hd.Total)
+			}
 			bpct := float64(100*bd.Covered) / float64(bd.Total)
 			fmt.Fprintf(w, "%s|%.2f%%|%d of %d|%+.2f%%|(%.2f%%)|(%d of %d)\n", pkg,
 				hpct, hd.Covered, hd.Total,
