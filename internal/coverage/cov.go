@@ -24,14 +24,38 @@ type (
 
 	StmtCount   struct{ Count, Covered int }
 	FileData    map[string]StmtCount
-	PackageData map[string]StmtCount
-	ModuleData  map[string]StmtCount
+	PathData    map[string]StmtCount
+	PackageData struct{ PathData }
+	RootData    struct{ PathData }
+	ModuleData  struct{ PathData }
 
-	StmtDelta   struct{ BaseCount, BaseCovered, HeadCount, HeadCovered int }
-	FileDelta   map[string]StmtDelta
-	PathDelta   map[string]StmtDelta
-	ModuleDelta map[string]StmtCount
+	StmtDelta    struct{ BaseCount, BaseCovered, HeadCount, HeadCovered int }
+	PathDelta    map[string]StmtDelta
+	FileDelta    struct{ PathDelta }
+	PackageDelta struct{ PathDelta }
+	RootDelta    struct{ PathDelta }
+	ModuleDelta  struct{ PathDelta }
 )
+
+func (FileData) Grouping() string                  { return "File" }
+func (FileDelta) Grouping() string                 { return "File" }
+func (PackageData) Grouping() string               { return "Package" }
+func (PackageDelta) Grouping() string              { return "Package" }
+func (RootData) Grouping() string                  { return "Root" }
+func (RootDelta) Grouping() string                 { return "Root" }
+func (ModuleData) Grouping() string                { return "Module" }
+func (ModuleDelta) Grouping() string               { return "Module" }
+func (fd FileDelta) Detail(p string) Counts        { return fd.PathDelta.Detail(p, false) }
+func (pd PackageData) Detail(p string) Counts      { return pd.PathData.Detail(p, false) }
+func (pd PackageDelta) Detail(p string) Counts     { return pd.PathDelta.Detail(p, false) }
+func (rd RootData) Detail(p string) Counts         { return rd.PathData.Detail(p, true) }
+func (rd RootDelta) Detail(p string) Counts        { return rd.PathDelta.Detail(p, true) }
+func (md ModuleData) Detail(p string) Counts       { return md.PathData.Detail(p, true) }
+func (md ModuleDelta) Detail(p string) Counts      { return md.PathDelta.Detail(p, true) }
+func (fd FileDelta) BaseDetail(p string) Counts    { return fd.PathDelta.BaseDetail(p, false) }
+func (pd PackageDelta) BaseDetail(p string) Counts { return pd.PathDelta.BaseDetail(p, false) }
+func (rd RootDelta) BaseDetail(p string) Counts    { return rd.PathDelta.BaseDetail(p, true) }
+func (md ModuleDelta) BaseDetail(p string) Counts  { return md.PathDelta.BaseDetail(p, true) }
 
 func (sd StatementData) EachStatement(fn func(path, pos string, count int, covered int)) {
 	for k, v := range sd {
@@ -105,53 +129,56 @@ func (fd FileData) Detail(path string) Counts {
 	return Counts{Covered: c.Covered, Total: c.Count}
 }
 
-func (pd PackageData) EachPath(fn func(path string, count int, covered int)) { pd.EachPackage(fn) }
+func (pd PathData) EachPath(fn func(path string, count int, covered int)) { pd.EachPackage(fn) }
 
-func (pd PackageData) EachPackage(fn func(path string, count int, covered int)) {
+func (pd PathData) EachPackage(fn func(path string, count int, covered int)) {
 	for k, v := range pd {
 		fn(k, v.Count, v.Covered)
 	}
 }
 
-func (pd PackageData) EachModule(fn func(path string, count int, covered int)) {
+func (pd PathData) EachModule(fn func(path string, count int, covered int)) {
 	for k, v := range pd {
 		fn(pathmod(nil, k), v.Count, v.Covered)
 	}
 }
 
 func Diff(log diag.Interface, old, new EachPather) ChangeDetailer {
-	var oldEach, newEach func(func(string, int, int))
-	oldPD, _ := old.(EachPackager)
-	newPD, _ := new.(EachPackager)
-	oldFD, _ := old.(EachFiler)
-	newFD, _ := new.(EachFiler)
-
-	isAggregate := true
-	if oldFD != nil && newFD != nil {
-		isAggregate = false
-		oldEach = oldFD.EachFile
-		newEach = newFD.EachFile
-	} else if oldPD != nil && newPD != nil {
-		oldEach = oldPD.EachPackage
-		newEach = newPD.EachPackage
-		if oldFD != nil {
-			oldEach = ByPackage(log, oldFD).EachPackage
+	groupings := []string{"", "Statement", "File", "Package", "Root", "Module"}
+	oldGrp, newGrp := old.Grouping(), new.Grouping()
+	var oldN, newN int
+	for i, grp := range groupings {
+		if grp == oldGrp {
+			oldN = i
 		}
-		if newFD != nil {
-			newEach = ByPackage(log, newFD).EachPackage
-		}
-	} else {
-		oldEach = old.EachPath
-		newEach = new.EachPath
-		if oldPD != nil {
-			oldEach = ByModule(log, oldPD).EachModule
-		}
-		if newPD != nil {
-			newEach = ByModule(log, newPD).EachModule
+		if grp == newGrp {
+			newN = i
 		}
 	}
 
-	delta := make(PathDelta)
+	as := func(log diag.Interface, grp string, ep EachPather) EachPather {
+		switch grp[0] {
+		case 'P':
+			return ByPackage(log, ep.(EachFiler))
+		case 'R':
+			return ByRoot(log, ep.(EachPackager))
+		case 'M':
+			return ByModule(log, ep.(EachPackager))
+		}
+		panic(grp)
+	}
+
+	oldEach := old.EachPath
+	newEach := new.EachPath
+	grp := oldGrp
+	if oldN < newN {
+		oldEach = as(log, newGrp, old).EachPath
+		grp = newGrp
+	} else if newN < oldN {
+		newEach = as(log, oldGrp, new).EachPath
+	}
+
+	delta := make(map[string]StmtDelta)
 	oldEach(func(path string, count, covered int) {
 		cc := delta[path]
 		cc.BaseCount = count
@@ -164,13 +191,20 @@ func Diff(log diag.Interface, old, new EachPather) ChangeDetailer {
 		cc.HeadCovered += covered
 		delta[path] = cc
 	})
-	if !isAggregate {
-		return FileDelta(delta)
+	switch grp[0] {
+	case 'M':
+		return ModuleDelta{delta}
+	case 'R':
+		return RootDelta{delta}
+	case 'P':
+		return PackageDelta{delta}
+	case 'F':
+		return FileDelta{delta}
 	}
-	return delta
+	panic(grp)
 }
 
-func (pd PackageData) Paths() []string {
+func (pd PathData) Paths() []string {
 	pkgs := make([]string, 0, len(pd))
 	for p := range pd {
 		pkgs = append(pkgs, string(p))
@@ -179,50 +213,9 @@ func (pd PackageData) Paths() []string {
 	return pkgs
 }
 
-func (pd PackageData) Detail(path string) Counts {
+func (pd PathData) Detail(path string, agg bool) Counts {
 	c := pd[path]
-	return Counts{Covered: c.Covered, Total: c.Count, IsAggregate: true}
-}
-
-func (md ModuleData) EachPath(fn func(path string, count int, covered int)) { md.EachModule(fn) }
-
-func (md ModuleData) EachModule(fn func(path string, count int, covered int)) {
-	for k, v := range md {
-		fn(k, v.Count, v.Covered)
-	}
-}
-
-func (md ModuleData) Paths() []string {
-	pkgs := make([]string, 0, len(md))
-	for p := range md {
-		pkgs = append(pkgs, string(p))
-	}
-	sort.Strings(pkgs)
-	return pkgs
-}
-
-func (md ModuleData) Detail(path string) Counts {
-	c := md[path]
-	return Counts{Covered: c.Covered, Total: c.Count, IsAggregate: true}
-}
-
-func (pd FileDelta) Paths() []string {
-	files := make([]string, 0, len(pd))
-	for p := range pd {
-		files = append(files, strings.TrimSuffix(p, "/"))
-	}
-	sort.Strings(files)
-	return files
-}
-
-func (pd FileDelta) Detail(path string) Counts {
-	c := pd[path]
-	return Counts{Covered: c.HeadCovered, Total: c.HeadCount, IsAggregate: false}
-}
-
-func (pd FileDelta) BaseDetail(path string) Counts {
-	c := pd[path]
-	return Counts{Covered: c.BaseCovered, Total: c.BaseCount, IsAggregate: false}
+	return Counts{Covered: c.Covered, Total: c.Count, IsAggregate: agg && path != "."}
 }
 
 func (pd PathDelta) Paths() []string {
@@ -234,14 +227,14 @@ func (pd PathDelta) Paths() []string {
 	return paths
 }
 
-func (pd PathDelta) Detail(path string) Counts {
+func (pd PathDelta) Detail(path string, agg bool) Counts {
 	c := pd[path]
-	return Counts{Covered: c.HeadCovered, Total: c.HeadCount, IsAggregate: path != "."}
+	return Counts{Covered: c.HeadCovered, Total: c.HeadCount, IsAggregate: agg && path != "."}
 }
 
-func (pd PathDelta) BaseDetail(path string) Counts {
+func (pd PathDelta) BaseDetail(path string, agg bool) Counts {
 	c := pd[path]
-	return Counts{Covered: c.BaseCovered, Total: c.BaseCount, IsAggregate: path != "."}
+	return Counts{Covered: c.BaseCovered, Total: c.BaseCount, IsAggregate: agg && path != "."}
 }
 
 func CollectStatements(ctx diag.Context, options *TestOptions) (StatementData, error) {
@@ -303,6 +296,7 @@ type (
 		// Unlike the other Each* methods, this is at the 'native' granularity
 		// for the underlying storage.
 		EachPath(func(path string, count int, covered int))
+		Grouping() string
 	}
 )
 
@@ -319,7 +313,7 @@ func ByFiles(log diag.Interface, stmts EachStatementer) FileData {
 }
 
 func ByPackage(log diag.Interface, files EachFiler) PackageData {
-	pd := make(PackageData)
+	pd := make(PathData)
 	files.EachFile(func(path string, count int, covered int) {
 		rsl := strings.LastIndexByte(path, '/')
 		if rsl < 0 {
@@ -333,11 +327,11 @@ func ByPackage(log diag.Interface, files EachFiler) PackageData {
 		cc.Covered += covered
 		pd[ploc] = cc
 	})
-	return pd
+	return PackageData{pd}
 }
 
-func ByRoot(log diag.Interface, pkgs EachPackager) PackageData {
-	pd := make(PackageData)
+func ByRoot(log diag.Interface, pkgs EachPackager) RootData {
+	pd := make(PathData)
 	pkgs.EachPackage(func(path string, count int, covered int) {
 		root := pathroot(log, path)
 		cc := pd[root]
@@ -345,7 +339,7 @@ func ByRoot(log diag.Interface, pkgs EachPackager) PackageData {
 		cc.Covered += covered
 		pd[root] = cc
 	})
-	return pd
+	return RootData{pd}
 }
 
 func pathroot(log diag.Interface, path string) string {
@@ -378,7 +372,7 @@ func pathmod(log diag.Interface, path string) string {
 }
 
 func ByModule(log diag.Interface, pkgs EachPackager) ModuleData {
-	md := make(ModuleData)
+	md := make(PathData)
 	pkgs.EachPackage(func(path string, count int, covered int) {
 		parts := strings.Split(path, "/")
 		if len(parts) > 3 {
@@ -394,7 +388,7 @@ func ByModule(log diag.Interface, pkgs EachPackager) ModuleData {
 		cc.Covered += covered
 		md[mod] = cc
 	})
-	return md
+	return ModuleData{md}
 }
 
 type TestOptions struct {
