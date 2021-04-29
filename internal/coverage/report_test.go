@@ -23,11 +23,11 @@ type (
 	bymod  struct{ pkgs }
 )
 
-func (bypkg) Grouping() string                   { return "Package" }
+func (bypkg) Grouping() coverage.Grouping        { return coverage.PackageGrouping }
 func (b bypkg) Detail(p string) coverage.Counts  { return b.pkgs.Detail(p, false) }
-func (byroot) Grouping() string                  { return "Root" }
+func (byroot) Grouping() coverage.Grouping       { return coverage.RootGrouping }
 func (b byroot) Detail(p string) coverage.Counts { return b.pkgs.Detail(p, true) }
-func (bymod) Grouping() string                   { return "Module" }
+func (bymod) Grouping() coverage.Grouping        { return coverage.ModuleGrouping }
 func (b bymod) Detail(p string) coverage.Counts  { return b.pkgs.Detail(p, true) }
 
 func (p pkgs) Paths() []string {
@@ -60,13 +60,13 @@ type (
 	bydmod  struct{ dpkgs }
 )
 
-func (bydpkg) Grouping() string                        { return "Package" }
+func (bydpkg) Grouping() coverage.Grouping             { return coverage.PackageGrouping }
 func (pd bydpkg) Detail(p string) coverage.Counts      { return pd.dpkgs.Detail(p, false) }
 func (pd bydpkg) BaseDetail(p string) coverage.Counts  { return pd.dpkgs.BaseDetail(p, false) }
-func (bydroot) Grouping() string                       { return "Root" }
+func (bydroot) Grouping() coverage.Grouping            { return coverage.RootGrouping }
 func (pd bydroot) Detail(p string) coverage.Counts     { return pd.dpkgs.Detail(p, true) }
 func (pd bydroot) BaseDetail(p string) coverage.Counts { return pd.dpkgs.BaseDetail(p, true) }
-func (bydmod) Grouping() string                        { return "Module" }
+func (bydmod) Grouping() coverage.Grouping             { return coverage.ModuleGrouping }
 func (pd bydmod) Detail(p string) coverage.Counts      { return pd.dpkgs.Detail(p, true) }
 func (pd bydmod) BaseDetail(p string) coverage.Counts  { return pd.dpkgs.BaseDetail(p, true) }
 

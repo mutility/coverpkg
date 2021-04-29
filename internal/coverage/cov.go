@@ -35,16 +35,39 @@ type (
 	PackageDelta struct{ PathDelta }
 	RootDelta    struct{ PathDelta }
 	ModuleDelta  struct{ PathDelta }
+
+	Grouping int
 )
 
-func (FileData) Grouping() string                  { return "File" }
-func (FileDelta) Grouping() string                 { return "File" }
-func (PackageData) Grouping() string               { return "Package" }
-func (PackageDelta) Grouping() string              { return "Package" }
-func (RootData) Grouping() string                  { return "Root" }
-func (RootDelta) Grouping() string                 { return "Root" }
-func (ModuleData) Grouping() string                { return "Module" }
-func (ModuleDelta) Grouping() string               { return "Module" }
+const (
+	UnknownGrouping Grouping = iota
+	StatementGrouping
+	FileGrouping
+	PackageGrouping
+	RootGrouping
+	ModuleGrouping
+)
+
+const _grouping_names = "UnknownStatementFilePackageRootModule"
+
+var _grouping_idx = [...]uint8{0, 7, 16, 20, 27, 31, 37}
+
+func (g Grouping) String() string {
+	n := int(g)
+	if n < 0 || n+1 >= len(_grouping_idx) {
+		return ""
+	}
+	return _grouping_names[_grouping_idx[n]:_grouping_idx[n+1]]
+}
+
+func (FileData) Grouping() Grouping                { return FileGrouping }
+func (FileDelta) Grouping() Grouping               { return FileGrouping }
+func (PackageData) Grouping() Grouping             { return PackageGrouping }
+func (PackageDelta) Grouping() Grouping            { return PackageGrouping }
+func (RootData) Grouping() Grouping                { return RootGrouping }
+func (RootDelta) Grouping() Grouping               { return RootGrouping }
+func (ModuleData) Grouping() Grouping              { return ModuleGrouping }
+func (ModuleDelta) Grouping() Grouping             { return ModuleGrouping }
 func (fd FileDelta) Detail(p string) Counts        { return fd.PathDelta.Detail(p, false) }
 func (pd PackageData) Detail(p string) Counts      { return pd.PathData.Detail(p, false) }
 func (pd PackageDelta) Detail(p string) Counts     { return pd.PathDelta.Detail(p, false) }
@@ -144,25 +167,15 @@ func (pd PathData) EachModule(fn func(path string, count int, covered int)) {
 }
 
 func Diff(log diag.Interface, old, new EachPather) ChangeDetailer {
-	groupings := []string{"", "Statement", "File", "Package", "Root", "Module"}
 	oldGrp, newGrp := old.Grouping(), new.Grouping()
-	var oldN, newN int
-	for i, grp := range groupings {
-		if grp == oldGrp {
-			oldN = i
-		}
-		if grp == newGrp {
-			newN = i
-		}
-	}
 
-	as := func(log diag.Interface, grp string, ep EachPather) EachPather {
-		switch grp[0] {
-		case 'P':
+	as := func(log diag.Interface, grp Grouping, ep EachPather) EachPather {
+		switch grp {
+		case PackageGrouping:
 			return ByPackage(log, ep.(EachFiler))
-		case 'R':
+		case RootGrouping:
 			return ByRoot(log, ep.(EachPackager))
-		case 'M':
+		case ModuleGrouping:
 			return ByModule(log, ep.(EachPackager))
 		}
 		panic(grp)
@@ -171,10 +184,10 @@ func Diff(log diag.Interface, old, new EachPather) ChangeDetailer {
 	oldEach := old.EachPath
 	newEach := new.EachPath
 	grp := oldGrp
-	if oldN < newN {
+	if oldGrp < newGrp {
 		oldEach = as(log, newGrp, old).EachPath
 		grp = newGrp
-	} else if newN < oldN {
+	} else if newGrp < oldGrp {
 		newEach = as(log, oldGrp, new).EachPath
 	}
 
@@ -191,14 +204,14 @@ func Diff(log diag.Interface, old, new EachPather) ChangeDetailer {
 		cc.HeadCovered += covered
 		delta[path] = cc
 	})
-	switch grp[0] {
-	case 'M':
+	switch grp {
+	case ModuleGrouping:
 		return ModuleDelta{delta}
-	case 'R':
+	case RootGrouping:
 		return RootDelta{delta}
-	case 'P':
+	case PackageGrouping:
 		return PackageDelta{delta}
-	case 'F':
+	case FileGrouping:
 		return FileDelta{delta}
 	}
 	panic(grp)
@@ -296,7 +309,7 @@ type (
 		// Unlike the other Each* methods, this is at the 'native' granularity
 		// for the underlying storage.
 		EachPath(func(path string, count int, covered int))
-		Grouping() string
+		Grouping() Grouping
 	}
 )
 

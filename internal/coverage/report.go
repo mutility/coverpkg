@@ -8,7 +8,7 @@ import (
 
 type PathDetailer interface {
 	// Grouping returns a description of the grouping level
-	Grouping() string
+	Grouping() Grouping
 	// Paths return a sorted list of known paths
 	Paths() []string
 	// Detail returns statement counts for the requested package
@@ -168,7 +168,7 @@ func ReportMDTo(w io.Writer, c PathDetailer) {
 			htot.Total += hd.Total
 		}
 	}
-	grouping := "| " + c.Grouping()
+	grouping := "| " + c.Grouping().String()
 	if btot.Total > 0 {
 		fmt.Fprintln(w, grouping+" | Coverage | Statements | Change | (Covered) | (Statements) |")
 		fmt.Fprintln(w, "|:--|--:|--:|--:|--:|--:|")
