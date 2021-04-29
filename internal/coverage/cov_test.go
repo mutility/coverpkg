@@ -31,22 +31,22 @@ func TestLoadAgg(t *testing.T) {
 	}
 
 	pkg := ByPackage(ctx, st)
-	wantpkg := PackageData{
+	wantpkg := PackageData{PathData{
 		"github.com/mutility/coverpkg/internal/coverage": StmtCount{178, 77},
 		"github.com/mutility/coverpkg/internal/ghacover": StmtCount{100, 0},
 		"github.com/mutility/coverpkg/internal/gitcover": StmtCount{56, 0},
 		"github.com/mutility/coverpkg":                   StmtCount{25, 0},
-	}
+	}}
 
 	if diff := cmp.Diff(wantpkg, pkg); diff != "" {
 		t.Errorf("bypkg (-want +got):\n%s", diff)
 	}
 
 	root := ByRoot(ctx, st)
-	wantroot := PackageData{
+	wantroot := RootData{PathData{
 		"github.com/mutility/coverpkg/internal": StmtCount{334, 77},
 		"github.com/mutility/coverpkg":          StmtCount{25, 0},
-	}
+	}}
 
 	if diff := cmp.Diff(wantroot, root); diff != "" {
 		t.Errorf("byroot (-want +got):\n%s", diff)

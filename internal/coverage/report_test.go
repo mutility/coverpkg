@@ -16,7 +16,19 @@ type stmts struct {
 	Tot int
 }
 
-type pkgs []stmts
+type (
+	pkgs   []stmts
+	bypkg  struct{ pkgs }
+	byroot struct{ pkgs }
+	bymod  struct{ pkgs }
+)
+
+func (bypkg) Grouping() coverage.Grouping        { return coverage.PackageGrouping }
+func (b bypkg) Detail(p string) coverage.Counts  { return b.pkgs.Detail(p, false) }
+func (byroot) Grouping() coverage.Grouping       { return coverage.RootGrouping }
+func (b byroot) Detail(p string) coverage.Counts { return b.pkgs.Detail(p, true) }
+func (bymod) Grouping() coverage.Grouping        { return coverage.ModuleGrouping }
+func (b bymod) Detail(p string) coverage.Counts  { return b.pkgs.Detail(p, true) }
 
 func (p pkgs) Paths() []string {
 	pkgs := make([]string, len(p))
@@ -26,10 +38,10 @@ func (p pkgs) Paths() []string {
 	return pkgs
 }
 
-func (p pkgs) Detail(pkg string) coverage.Counts {
+func (p pkgs) Detail(pkg string, agg bool) coverage.Counts {
 	for _, p := range p {
 		if p.Pkg == pkg {
-			return coverage.Counts{Total: p.Tot, Covered: p.Cov, IsAggregate: pkg != "."}
+			return coverage.Counts{Total: p.Tot, Covered: p.Cov, IsAggregate: agg && pkg != "."}
 		}
 	}
 	return coverage.Counts{}
@@ -41,7 +53,22 @@ type deltas struct {
 	BaseCov, HeadCov int
 }
 
-type dpkgs []deltas
+type (
+	dpkgs   []deltas
+	bydpkg  struct{ dpkgs }
+	bydroot struct{ dpkgs }
+	bydmod  struct{ dpkgs }
+)
+
+func (bydpkg) Grouping() coverage.Grouping             { return coverage.PackageGrouping }
+func (pd bydpkg) Detail(p string) coverage.Counts      { return pd.dpkgs.Detail(p, false) }
+func (pd bydpkg) BaseDetail(p string) coverage.Counts  { return pd.dpkgs.BaseDetail(p, false) }
+func (bydroot) Grouping() coverage.Grouping            { return coverage.RootGrouping }
+func (pd bydroot) Detail(p string) coverage.Counts     { return pd.dpkgs.Detail(p, true) }
+func (pd bydroot) BaseDetail(p string) coverage.Counts { return pd.dpkgs.BaseDetail(p, true) }
+func (bydmod) Grouping() coverage.Grouping             { return coverage.ModuleGrouping }
+func (pd bydmod) Detail(p string) coverage.Counts      { return pd.dpkgs.Detail(p, true) }
+func (pd bydmod) BaseDetail(p string) coverage.Counts  { return pd.dpkgs.BaseDetail(p, true) }
 
 func (p dpkgs) Paths() []string {
 	pkgs := make([]string, len(p))
@@ -51,19 +78,19 @@ func (p dpkgs) Paths() []string {
 	return pkgs
 }
 
-func (p dpkgs) Detail(pkg string) coverage.Counts {
+func (p dpkgs) Detail(pkg string, agg bool) coverage.Counts {
 	for _, p := range p {
 		if p.Pkg == pkg {
-			return coverage.Counts{Total: p.HeadTot, Covered: p.HeadCov, IsAggregate: pkg != "."}
+			return coverage.Counts{Total: p.HeadTot, Covered: p.HeadCov, IsAggregate: agg && pkg != "."}
 		}
 	}
 	return coverage.Counts{}
 }
 
-func (p dpkgs) BaseDetail(pkg string) coverage.Counts {
+func (p dpkgs) BaseDetail(pkg string, agg bool) coverage.Counts {
 	for _, p := range p {
 		if p.Pkg == pkg {
-			return coverage.Counts{Total: p.BaseTot, Covered: p.BaseCov}
+			return coverage.Counts{Total: p.BaseTot, Covered: p.BaseCov, IsAggregate: agg && pkg != "."}
 		}
 	}
 	return coverage.Counts{}
@@ -82,8 +109,8 @@ func sdcov(pkg string, bcov, btot, hcov, htot int) deltas {
 }
 
 func TestReport(t *testing.T) {
-	mdhead := "| Package | Coverage | Statements |\n|:--|--:|--:|\n"
-	mddiff := "| Package | Coverage | Statements | Change | (Covered) | (Statements) |\n|:--|--:|--:|--:|--:|--:|\n"
+	mdhead := " | Coverage | Statements |\n|:--|--:|--:|\n"
+	mddiff := " | Coverage | Statements | Change | (Covered) | (Statements) |\n|:--|--:|--:|--:|--:|--:|\n"
 	for _, tt := range []struct {
 		name   string
 		want   string
@@ -92,49 +119,50 @@ func TestReport(t *testing.T) {
 	}{
 		{
 			"one", "pkg/...:  70.00%  7 of 10\n",
-			mdhead + "pkg/...|70.00%|7 of 10\n",
-			pkgs{scov("pkg", 7, 10)},
+			"| Module" + mdhead + "pkg/...|70.00%|7 of 10\n",
+			bymod{pkgs{scov("pkg", 7, 10)}},
 		},
 		{
 			"two", "" +
-				"a/...:  70.00%   7 of 10\n" +
-				"b/...:  23.08%   3 of 13\n" +
+				"a:      70.00%   7 of 10\n" +
+				"b:      23.08%   3 of 13\n" +
 				"<all>:  43.48%  10 of 23\n",
-			mdhead +
-				"a/...|70.00%|7 of 10\n" +
-				"b/...|23.08%|3 of 13\n" +
+			"| Package" + mdhead +
+				"a|70.00%|7 of 10\n" +
+				"b|23.08%|3 of 13\n" +
 				"**Total**|43.48%|10 of 23\n",
-			pkgs{scov("a", 7, 10), scov("b", 3, 13)},
+			bypkg{pkgs{scov("a", 7, 10), scov("b", 3, 13)}},
 		},
 		{
 			"dot", "" +
 				"sub/...:  80.00%  8 of 10\n" +
 				".:         0.00%  0 of 2\n" +
 				"<all>:    66.67%  8 of 12\n",
-			mdhead +
+			"| Root" + mdhead +
 				"sub/...|80.00%|8 of 10\n" +
 				".|0.00%|0 of 2\n" +
 				"**Total**|66.67%|8 of 12\n",
-			pkgs{scov("sub", 8, 10), scov(".", 0, 2)},
+			byroot{pkgs{scov("sub", 8, 10), scov(".", 0, 2)}},
 		},
 		{
 			"delta", "pkg/...:  63.64%  7 of 11  -14.14%  (was  77.78%  7 of 9)\n",
-			mddiff + "pkg/...|63.64%|7 of 11|-14.14%|(77.78%)|(7 of 9)\n",
-			dpkgs{sdcov("pkg", 7, 9, 7, 11)},
+			"| Root" + mddiff + "pkg/...|63.64%|7 of 11|-14.14%|(77.78%)|(7 of 9)\n",
+			bydroot{dpkgs{sdcov("pkg", 7, 9, 7, 11)}},
 		},
 		{
 			"nobase", "pkg/...:  63.64%  7 of 11  +63.64%\n",
-			mdhead + "pkg/...|63.64%|7 of 11\n",
-			dpkgs{sdcov("pkg", 0, 0, 7, 11)},
+			"| Module" + mdhead + "pkg/...|63.64%|7 of 11\n",
+			bydmod{dpkgs{sdcov("pkg", 0, 0, 7, 11)}},
 		},
 		{
-			"drop", "pkg/a/...:   5.00%  5 of 100   +0.00%  (was   5.00%  5 of 100)\n" +
-				"pkg/b/...:   0.00%  0 of   0   -1.00%  (was   1.00%  1 of 100)\n" +
+			"drop", "pkg/a:       5.00%  5 of 100   +0.00%  (was   5.00%  5 of 100)\n" +
+				"pkg/b:       0.00%  0 of   0   -1.00%  (was   1.00%  1 of 100)\n" +
 				"<all>:       5.00%  5 of 100   +2.00%  (was   3.00%  6 of 200)\n",
-			mddiff + "pkg/a/...|5.00%|5 of 100|+0.00%|(5.00%)|(5 of 100)\n" +
-				"pkg/b/...|0.00%|0 of 0|-1.00%|(1.00%)|(1 of 100)\n" +
+			"| Package" + mddiff +
+				"pkg/a|5.00%|5 of 100|+0.00%|(5.00%)|(5 of 100)\n" +
+				"pkg/b|0.00%|0 of 0|-1.00%|(1.00%)|(1 of 100)\n" +
 				"**Total**|5.00%|5 of 100|+2.00%|(3.00%)|(6 of 200)\n",
-			dpkgs{sdcov("pkg/a", 5, 100, 5, 100), sdcov("pkg/b", 1, 100, 0, 0)},
+			bydpkg{dpkgs{sdcov("pkg/a", 5, 100, 5, 100), sdcov("pkg/b", 1, 100, 0, 0)}},
 		},
 		{
 			"complex", "" +
@@ -144,20 +172,20 @@ func TestReport(t *testing.T) {
 				"decrease/...:  20.00%   20 of 100  -20.00%  (was  40.00%   20 of 50)\n" +
 				"unlikely/...: 100.00%    1 of   1   +0.00%  (was 100.00%    1 of 1)\n" +
 				"<all>:         48.97%  190 of 388  -18.63%  (was  67.60%  169 of 250)\n",
-			mddiff +
+			"| Root" + mddiff +
 				"new/...|1.14%|1 of 88\n" +
 				"match/...|88.89%|88 of 99|+0.00%|(88.89%)|(88 of 99)\n" +
 				"improve/...|80.00%|80 of 100|+20.00%|(60.00%)|(60 of 100)\n" +
 				"decrease/...|20.00%|20 of 100|-20.00%|(40.00%)|(20 of 50)\n" +
 				"unlikely/...|100.00%|1 of 1|+0.00%|(100.00%)|(1 of 1)\n" +
 				"**Total**|48.97%|190 of 388|-18.63%|(67.60%)|(169 of 250)\n",
-			dpkgs{
+			bydroot{dpkgs{
 				sdcov("new", 0, 0, 1, 88),
 				sdcov("match", 88, 99, 88, 99),
 				sdcov("improve", 60, 100, 80, 100),
 				sdcov("decrease", 20, 50, 20, 100),
 				sdcov("unlikely", 1, 1, 1, 1),
-			},
+			}},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -193,7 +221,7 @@ func TestLoadDiffReport(t *testing.T) {
 		fb := coverage.ByFiles(ctx, sb)
 		fd := coverage.Diff(ctx, fa, fb)
 		got := coverage.ReportMD(fd)
-		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+		want := `| File | Coverage | Statements | Change | (Covered) | (Statements) |
 |:--|--:|--:|--:|--:|--:|
 github.com/mutility/coverpkg/internal/testdata/fake.go|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
 `
@@ -209,7 +237,7 @@ github.com/mutility/coverpkg/internal/testdata/fake.go|100.00%|2 of 2|+100.00%|(
 		got := coverage.ReportMD(pd)
 		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
 |:--|--:|--:|--:|--:|--:|
-github.com/mutility/coverpkg/internal/testdata/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
+github.com/mutility/coverpkg/internal/testdata|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
 `
 
 		if diff := cmp.Diff(want, got); diff != "" {
@@ -221,13 +249,13 @@ github.com/mutility/coverpkg/internal/testdata/...|100.00%|2 of 2|+100.00%|(0.00
 		rb := coverage.ByRoot(ctx, sb)
 		rd := coverage.Diff(ctx, ra, rb)
 		got := coverage.ReportMD(rd)
-		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+		want := `| Root | Coverage | Statements | Change | (Covered) | (Statements) |
 |:--|--:|--:|--:|--:|--:|
 github.com/mutility/coverpkg/internal/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
 `
 
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("pmd (-want +got):\n%s", diff)
+			t.Errorf("rmd (-want +got):\n%s", diff)
 		}
 	}
 	{
@@ -235,13 +263,13 @@ github.com/mutility/coverpkg/internal/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 
 		mb := coverage.ByModule(ctx, sb)
 		md := coverage.Diff(ctx, ma, mb)
 		got := coverage.ReportMD(md)
-		want := `| Package | Coverage | Statements | Change | (Covered) | (Statements) |
+		want := `| Module | Coverage | Statements | Change | (Covered) | (Statements) |
 |:--|--:|--:|--:|--:|--:|
 github.com/mutility/coverpkg/...|100.00%|2 of 2|+100.00%|(0.00%)|(0 of 2)
 `
 
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("pmd (-want +got):\n%s", diff)
+			t.Errorf("mmd (-want +got):\n%s", diff)
 		}
 	}
 }
