@@ -404,6 +404,7 @@ func runPR(c *cli.Context) error {
 	event := gha.Event(cfg.EventPath)
 	detail.BaseSHA = event.String(gha, "pull_request.base.sha")
 	detail.HeadSHA = event.String(gha, "pull_request.head.sha")
+	detail.IssueNumber = event.Int(ctx, "pull_request.number")
 
 	var basefilecov coverage.FileData
 	err := notes.Load(ctx, ref, detail.BaseSHA, &basefilecov)
@@ -464,7 +465,6 @@ func runPR(c *cli.Context) error {
 		}
 	}
 
-	detail.IssueNumber = event.Int(ctx, "pull_request.number")
 	id, err := doComment(ctx, event, &detail)
 	if id != 0 {
 		gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
@@ -503,7 +503,6 @@ func runArtifactComment(c *cli.Context) error {
 	}
 
 	err := loadMeta(ctx, event, "coverpkg", "meta.json", &detail)
-	gha.Debugf("%+v", detail.coverdetail)
 	if err == nil {
 		gha.SetOutput("summary-md", detail.MarkdownSummary)
 
