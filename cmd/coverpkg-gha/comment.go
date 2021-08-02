@@ -20,7 +20,7 @@ func getArtifact(ctx diag.Context, event *GitHubEvent, name, file string, detail
 
 	artifacts := wfartifacts{
 		client: github.NewClient(oauth2.NewClient(ctx, tok)),
-		owner:  event.String(ctx, "repository.owner"),
+		owner:  event.String(ctx, "repository.owner.login"),
 		repo:   event.String(ctx, "repository.name"),
 	}
 

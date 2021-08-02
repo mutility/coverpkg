@@ -84,11 +84,11 @@ In the mean time, it such a situation it will not report an error, and will inst
 ```yaml
     - name: Store Coverage
       id: coverpkg-artifact
-      if: ${{ outputs.coverpkg.comment-failed == true }}
+      if: ${{ steps.coverpkg.outputs.comment-failed == true }}
       uses: actions/upload-artifact@v2
       with:
         name: coverpkg
-        path: ${{ outputs.coverpkg.artifacts }}/
+        path: ${{ steps.coverpkg.outputs.artifacts }}/
 ```
 
 #### In a new workflow
