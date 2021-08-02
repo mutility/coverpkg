@@ -84,7 +84,7 @@ In the mean time, it such a situation it will not report an error, and will inst
 ```yaml
     - name: Store Coverage
       id: coverpkg-artifact
-      if: ${{ steps.coverpkg.outputs.comment-failed == true }}
+      if: ${{ steps.coverpkg.outputs.comment-failed == 403 }}
       uses: actions/upload-artifact@v2
       with:
         name: coverpkg

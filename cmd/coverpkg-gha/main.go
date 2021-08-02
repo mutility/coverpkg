@@ -442,9 +442,9 @@ func runPR(c *cli.Context) error {
 	detail.MarkdownSummary = coverage.ReportMD(diff)
 	gha.SetOutput("summary-md", detail.MarkdownSummary)
 	if arts != "" {
-		err = os.WriteFile(filepath.Join(arts, "summary.txt"), []byte(detail.TextSummary), 0x644)
+		err = os.WriteFile(filepath.Join(arts, "summary.txt"), []byte(detail.TextSummary), 0o644)
 		if err == nil {
-			os.WriteFile(filepath.Join(arts, "summary.md"), []byte(detail.MarkdownSummary), 0x644)
+			os.WriteFile(filepath.Join(arts, "summary.md"), []byte(detail.MarkdownSummary), 0o644)
 		}
 		if err == nil {
 			gha.SetOutput("artifacts", arts)
