@@ -106,13 +106,14 @@ on:
 jobs:
   upload:
     runs-on: ubuntu-latest
-    if: >
-      ${{ github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Coveage Comment
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.16'
+
+      - name: Coverage Comment
         uses: mutility/coverpkg@v1
         with:
           comment: replace
-          from-artifacts: true
 ```
