@@ -46,18 +46,25 @@ inputs:
 outputs:
   summary-txt:
     description: Summarizes coverage of module in ascii text
+    value: ${{ steps.coverpkg.outputs.summary-txt }}
   summary-md:
     description: Summarizes coverage of module in markdown
+    value: ${{ steps.coverpkg.outputs.summary-md }}
   pushed-coverage:
     description: Set to 'true' if head coverage was pushed back to origin
+    value: ${{ steps.coverpkg.outputs.pushed-coverage }}
   found-base:
     description: Set to 'true' if a pull-request base coverage was found
+    value: ${{ steps.coverpkg.outputs.found-base }}
   comment-id:
     description: Set to id of a posted or updated PR comment
+    value: ${{ steps.coverpkg.outputs.comment-id }}
   comment-failed:
     description: Set to 'true' if a comment could not be posted (typically a fork)
+    value: ${{ steps.coverpkg.outputs.comment-failed }}
   artifacts:
     description: Directory of created artifacts
+    value: ${{ steps.coverpkg.outputs.artifacts }}
 
 
 runs:
@@ -67,6 +74,7 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
     - run: ${{ github.action_path }}/coverpkg-gha ${{ github.event_name }}
+      id: coverpkg
       shell: bash
       env:
         INPUT_EXCLUDES: ${{ inputs.excludes }}
