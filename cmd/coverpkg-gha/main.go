@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/urfave/cli/v2"
@@ -28,19 +30,21 @@ func (e errInvalidComment) Error() string {
 
 type config struct {
 	// Always set to true when GitHub Actions is running the workflow. You can use this variable to differentiate when tests are being run locally or by GitHub Actions.
-	GithubActions bool
+	GithubActions bool `json:"-"`
 	// The name of the workflow.
-	Workflow string
+	Workflow string `json:"-"`
+	// The name of the person or app that initiated the workflow
+	Actor string `json:"-"`
 	// A unique number for each run within a repository. This number does not change if you re-run the workflow run.
-	RunID string
+	RunID string `json:"-"`
 	// The GitHub workspace directory path. The workspace directory is a copy of your repository if your workflow uses the actions/checkout action. If you don't use the actions/checkout action, the directory will be empty. For example, /home/runner/work/my-repo-name/my-repo-name.
-	Workspace string
+	Workspace string `json:"-"`
 	// The owner and repository name. For example, octocat/Hello-World.
-	Repository string
+	Repository string `json:"-"`
 	// The name of the webhook event that triggered the workflow.
-	EventName string
+	EventName string `json:"-"`
 	// The path of the file with the complete webhook event payload. For example, /github/workflow/event.json.
-	EventPath string
+	EventPath string `json:"-"`
 	// The commit SHA that triggered the workflow. For example, ffac537e6cbbf934b08745a378932722df287a53.
 	SHA string
 	// The branch or tag ref that triggered the workflow. For example, refs/heads/feature-branch-1. If neither a branch or tag is available for the event type, the variable will not exist.
@@ -50,21 +54,21 @@ type config struct {
 	// Only set for pull request events. The name of the base branch.
 	BaseRef string
 	// Returns the URL of the GitHub server. For example: https://github.com.
-	ServerURL string
+	ServerURL string `json:"-"`
 	// Returns the API URL. For example: https://api.github.com.
-	APIURL string
+	APIURL string `json:"-"`
 	// Returns the GraphQL API URL. For example: https://api.github.com/graphql.
-	GraphQLURL string
+	GraphQLURL string `json:"-"`
 
 	// File that receives environment variables to be set for future actions
-	SetEnv string
+	SetEnv string `json:"-"`
 	// File that receives path additions to be set for future actions
-	SetPath string
+	SetPath string `json:"-"`
 
 	// URL for information on this run. Not set directly by github actions.
-	RunURL string
+	RunURL string `json:"-"`
 	// API token for making calls to APIURL or GraphQLURL. Not set directly by github actions.
-	APIToken string
+	APIToken string `json:"-"`
 
 	Excludes       cli.StringSlice // Package path tokens to exclude; e.g. "gen" will exclude .../gen/...
 	Packages       cli.StringSlice // Packages to report on
@@ -74,6 +78,7 @@ type config struct {
 	NoPullCoverage bool            // Retrieve coverage details, unless true
 	CoverageRef    string          // Namespace for coverpkg notes
 	PRComment      string          // "", update, replace, or append
+	ArtifactPath   string          // Directory for artifacts; generate if unspecified.
 }
 
 func (cfg config) GitHubContext(c *cli.Context) (*GitHubAction, diag.Context) {
@@ -97,6 +102,7 @@ type details struct {
 	BasePct         float64
 	DeltaPct        float64
 	FoundBase       bool
+	IssueNumber     int
 }
 
 func main() {
@@ -156,6 +162,7 @@ retrieved.`,
 		// reflects https://docs.github.com/en/actions/reference/environment-variables
 		Flags: []cli.Flag{
 			boolVar(&cfg.GithubActions, "github-actions", "specify if running as a github action", "CI", "GITHUB_ACTIONS"),
+			stringVar(&cfg.Actor, "actor", "specify who initiated the workflow", "GITHUB_ACTOR"),
 			stringVar(&cfg.Workflow, "workflow", "specify the workflow name", "GITHUB_WORKFLOW"),
 			stringVar(&cfg.RunID, "run-id", "specify the run-id, used to form run-url", "GITHUB_RUN_ID"),
 			pathVar(&cfg.Workspace, "workspace", "specify the workspace directory", "GITHUB_WORKSPACE"),
@@ -175,6 +182,8 @@ retrieved.`,
 			stringVar(&cfg.GroupBy, "group-by", "specify grouping level: file, package, root, or module", "INPUT_GROUPBY"),
 			stringSliceVar(&cfg.Excludes, "exclude", "list package path names to exclude", "INPUT_EXCLUDES"),
 			defaultText(stringSliceVar(&cfg.Packages, "package", "list packages to report on", "INPUT_PACKAGES"), "all root level"),
+
+			pathVar(&cfg.ArtifactPath, "artifacts", "specify artifact output directory"),
 		},
 
 		// form run-url from server-url, repository, and run-id, unless explicitly specified.
@@ -219,7 +228,6 @@ retrieved.`,
 					"release",
 					"status",
 					"watch",
-					"workflow_run",
 				},
 				Usage: "Does nothing; exits without an error for unsupported GitHub Action events.",
 				Action: func(c *cli.Context) error {
@@ -264,6 +272,17 @@ retrieved.`,
 					boolVar(&cfg.NoPullCoverage, "coverpkg-nopull", "skip pulling coverage", "INPUT_NOPULL"),
 					stringVar(&cfg.Remote, "coverpkg-remote", "specify an alternate remote name", "INPUT_REMOTE"),
 					stringVar(&cfg.CoverageRef, "coverpkg-ref", "specify an alternate notes ref name", "INPUT_COVERPKGREF"),
+					stringVar(&cfg.PRComment, "coverpkg-comment", "specify commenting: update, replace, or append", "INPUT_COMMENT"),
+				},
+			},
+			{
+				Name:   "workflow_run",
+				Before: requireEventPath,
+				Action: runArtifactComment,
+				Usage:  "comment on PRs from forks",
+
+				Flags: []cli.Flag{
+					stringVar(&cfg.APIToken, "api-token", "specify the token used for commenting on pull requests", "INPUT_TOKEN"),
 					stringVar(&cfg.PRComment, "coverpkg-comment", "specify commenting: update, replace, or append", "INPUT_COMMENT"),
 				},
 			},
@@ -381,6 +400,7 @@ func runPR(c *cli.Context) error {
 	event := gha.Event(cfg.EventPath)
 	detail.BaseSHA = event.String(gha, "pull_request.base.sha")
 	detail.HeadSHA = event.String(gha, "pull_request.head.sha")
+	detail.IssueNumber = event.Int(ctx, "pull_request.number")
 
 	var basefilecov coverage.FileData
 	err := notes.Load(ctx, ref, detail.BaseSHA, &basefilecov)
@@ -412,15 +432,81 @@ func runPR(c *cli.Context) error {
 	detail.HeadPct = coverage.Percent(headcov)
 	detail.DeltaPct = detail.HeadPct - detail.BasePct
 
+	arts := cfg.ArtifactPath
+	if arts == "" {
+		arts, _ = os.MkdirTemp(os.TempDir(), "coverpkg")
+	}
+
 	detail.TextSummary = coverage.Report(diff)
-	gha.Debug(detail.TextSummary)
+	diag.Group(gha, "Coverage summary", func(gha diag.Interface) {
+		diag.Print(gha, detail.TextSummary)
+	})
 	gha.SetOutput("summary-txt", detail.TextSummary)
 	detail.MarkdownSummary = coverage.ReportMD(diff)
 	gha.SetOutput("summary-md", detail.MarkdownSummary)
+	if arts != "" {
+		err = os.WriteFile(filepath.Join(arts, "summary.txt"), []byte(detail.TextSummary), 0o644)
+		if err == nil {
+			err = os.WriteFile(filepath.Join(arts, "summary.md"), []byte(detail.MarkdownSummary), 0o644)
+		}
+		if err == nil {
+			var mj []byte
+			mj, err = json.Marshal(&detail)
+			if err == nil {
+				err = os.WriteFile(filepath.Join(arts, "meta.json"), mj, 0o644)
+			}
+		}
+		if err == nil {
+			gha.SetOutput("artifacts", arts)
+		}
+	}
 
 	id, err := doComment(ctx, event, &detail)
 	if id != 0 {
 		gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
+	}
+
+	if isForbidden(err) {
+		gha.SetOutput("comment-failed", "403")
+		err = nil
+	}
+	return err
+}
+
+func runArtifactComment(c *cli.Context) error {
+	switch cfg.PRComment {
+	case "", "none", "append", "replace", "update":
+	default:
+		return errInvalidComment(cfg.PRComment)
+	}
+
+	gha, ctx := cfg.GitHubContext(c)
+	detail := details{config: &cfg}
+
+	gha.Group("Event "+cfg.EventPath, func(i diag.Interface) {
+		evt, err := os.ReadFile(cfg.EventPath)
+		if err == nil {
+			gha.Printf("%s\n", evt)
+		} else {
+			gha.Print(err)
+		}
+	})
+
+	event := gha.Event(cfg.EventPath)
+	if ev := event.String(ctx, "workflow_run.event"); ev != "pull_request" {
+		diag.Warning(ctx, "Unsupported workflow_run event:", ev)
+		return nil
+	}
+
+	err := loadMeta(ctx, event, "coverpkg", "meta.json", &detail)
+	if err == nil {
+		gha.SetOutput("summary-md", detail.MarkdownSummary)
+
+		id, err := doComment(ctx, event, &detail)
+		if id != 0 {
+			gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
+		}
+		return err
 	}
 	return err
 }
