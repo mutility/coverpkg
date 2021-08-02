@@ -30,21 +30,21 @@ func (e errInvalidComment) Error() string {
 
 type config struct {
 	// Always set to true when GitHub Actions is running the workflow. You can use this variable to differentiate when tests are being run locally or by GitHub Actions.
-	GithubActions bool
+	GithubActions bool `json:"-"`
 	// The name of the workflow.
-	Workflow string
+	Workflow string `json:"-"`
 	// The name of the person or app that initiated the workflow
-	Actor string
+	Actor string `json:"-"`
 	// A unique number for each run within a repository. This number does not change if you re-run the workflow run.
-	RunID string
+	RunID string `json:"-"`
 	// The GitHub workspace directory path. The workspace directory is a copy of your repository if your workflow uses the actions/checkout action. If you don't use the actions/checkout action, the directory will be empty. For example, /home/runner/work/my-repo-name/my-repo-name.
-	Workspace string
+	Workspace string `json:"-"`
 	// The owner and repository name. For example, octocat/Hello-World.
-	Repository string
+	Repository string `json:"-"`
 	// The name of the webhook event that triggered the workflow.
-	EventName string
+	EventName string `json:"-"`
 	// The path of the file with the complete webhook event payload. For example, /github/workflow/event.json.
-	EventPath string
+	EventPath string `json:"-"`
 	// The commit SHA that triggered the workflow. For example, ffac537e6cbbf934b08745a378932722df287a53.
 	SHA string
 	// The branch or tag ref that triggered the workflow. For example, refs/heads/feature-branch-1. If neither a branch or tag is available for the event type, the variable will not exist.
@@ -54,21 +54,21 @@ type config struct {
 	// Only set for pull request events. The name of the base branch.
 	BaseRef string
 	// Returns the URL of the GitHub server. For example: https://github.com.
-	ServerURL string
+	ServerURL string `json:"-"`
 	// Returns the API URL. For example: https://api.github.com.
-	APIURL string
+	APIURL string `json:"-"`
 	// Returns the GraphQL API URL. For example: https://api.github.com/graphql.
-	GraphQLURL string
+	GraphQLURL string `json:"-"`
 
 	// File that receives environment variables to be set for future actions
-	SetEnv string
+	SetEnv string `json:"-"`
 	// File that receives path additions to be set for future actions
-	SetPath string
+	SetPath string `json:"-"`
 
 	// URL for information on this run. Not set directly by github actions.
-	RunURL string
+	RunURL string `json:"-"`
 	// API token for making calls to APIURL or GraphQLURL. Not set directly by github actions.
-	APIToken string
+	APIToken string `json:"-"`
 
 	Excludes       cli.StringSlice // Package path tokens to exclude; e.g. "gen" will exclude .../gen/...
 	Packages       cli.StringSlice // Packages to report on
@@ -94,10 +94,6 @@ var cfg = config{
 
 type details struct {
 	*config
-	*coverdetail
-}
-
-type coverdetail struct {
 	BaseSHA         string
 	HeadSHA         string
 	TextSummary     string
@@ -399,7 +395,7 @@ func runPR(c *cli.Context) error {
 		}
 	}
 
-	detail := details{config: &cfg, coverdetail: &coverdetail{}}
+	detail := details{config: &cfg}
 
 	event := gha.Event(cfg.EventPath)
 	detail.BaseSHA = event.String(gha, "pull_request.base.sha")
@@ -455,7 +451,7 @@ func runPR(c *cli.Context) error {
 		}
 		if err == nil {
 			var mj []byte
-			mj, err = json.Marshal(detail.coverdetail)
+			mj, err = json.Marshal(&detail)
 			if err == nil {
 				err = os.WriteFile(filepath.Join(arts, "meta.json"), mj, 0o644)
 			}
@@ -485,7 +481,7 @@ func runArtifactComment(c *cli.Context) error {
 	}
 
 	gha, ctx := cfg.GitHubContext(c)
-	detail := details{config: &cfg, coverdetail: &coverdetail{}}
+	detail := details{config: &cfg}
 
 	gha.Group("Event "+cfg.EventPath, func(i diag.Interface) {
 		evt, err := os.ReadFile(cfg.EventPath)

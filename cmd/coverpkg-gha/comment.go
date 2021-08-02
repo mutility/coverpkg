@@ -54,7 +54,7 @@ func loadMeta(ctx diag.Context, event *GitHubEvent, name, file string, detail *d
 	}
 
 	defer f.Close()
-	return json.NewDecoder(f).Decode(&detail.coverdetail)
+	return json.NewDecoder(f).Decode(&detail)
 }
 
 type wfartifacts struct {
