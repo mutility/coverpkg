@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -93,6 +94,10 @@ var cfg = config{
 
 type details struct {
 	*config
+	*coverdetail
+}
+
+type coverdetail struct {
 	BaseSHA         string
 	HeadSHA         string
 	TextSummary     string
@@ -394,7 +399,7 @@ func runPR(c *cli.Context) error {
 		}
 	}
 
-	detail := details{config: &cfg}
+	detail := details{config: &cfg, coverdetail: &coverdetail{}}
 
 	event := gha.Event(cfg.EventPath)
 	detail.BaseSHA = event.String(gha, "pull_request.base.sha")
@@ -445,7 +450,14 @@ func runPR(c *cli.Context) error {
 	if arts != "" {
 		err = os.WriteFile(filepath.Join(arts, "summary.txt"), []byte(detail.TextSummary), 0o644)
 		if err == nil {
-			os.WriteFile(filepath.Join(arts, "summary.md"), []byte(detail.MarkdownSummary), 0o644)
+			err = os.WriteFile(filepath.Join(arts, "summary.md"), []byte(detail.MarkdownSummary), 0o644)
+		}
+		if err == nil {
+			var mj []byte
+			mj, err = json.Marshal(detail.coverdetail)
+			if err == nil {
+				err = os.WriteFile(filepath.Join(arts, "meta.json"), mj, 0o644)
+			}
 		}
 		if err == nil {
 			gha.SetOutput("artifacts", arts)
@@ -473,7 +485,7 @@ func runArtifactComment(c *cli.Context) error {
 	}
 
 	gha, ctx := cfg.GitHubContext(c)
-	detail := details{config: &cfg}
+	detail := details{config: &cfg, coverdetail: &coverdetail{}}
 
 	gha.Group("Event "+cfg.EventPath, func(i diag.Interface) {
 		evt, err := os.ReadFile(cfg.EventPath)
@@ -490,15 +502,10 @@ func runArtifactComment(c *cli.Context) error {
 		return nil
 	}
 
-	summary, err := getArtifact(ctx, event, "coverpkg", "summary.md", detail)
-	if err == nil && summary != "" {
-		detail.BaseSHA = event.String(gha, "workflow_run.pull_requests.0.base.sha")
-		detail.HeadSHA = event.String(gha, "workflow_run.pull_requests.0.head.sha")
-		detail.MarkdownSummary = summary
+	err := loadMeta(ctx, event, "coverpkg", "meta.json", detail)
+	if err == nil {
+		gha.SetOutput("summary-md", detail.MarkdownSummary)
 
-		gha.SetOutput("summary-md", summary)
-
-		detail.IssueNumber = event.Int(gha, "workflow_run.pull_requests.0.number")
 		id, err := doComment(ctx, event, &detail)
 		if id != 0 {
 			gha.SetOutput("comment-id", strconv.FormatInt(id, 10))

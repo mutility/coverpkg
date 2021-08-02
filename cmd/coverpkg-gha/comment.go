@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 	"github.com/mutility/diag"
 )
 
-func getArtifact(ctx diag.Context, event *GitHubEvent, name, file string, detail details) (string, error) {
+func loadMeta(ctx diag.Context, event *GitHubEvent, name, file string, detail details) error {
 	tok := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: detail.APIToken})
 
 	artifacts := wfartifacts{
@@ -27,34 +28,33 @@ func getArtifact(ctx diag.Context, event *GitHubEvent, name, file string, detail
 
 	art := artifacts.find(ctx, int64(event.Int(ctx, "workflow_run.id")), name)
 	if art == nil {
-		return "", nil
+		return nil
 	}
 
 	u := artifacts.download(ctx, art)
 	resp, err := http.DefaultClient.Get(u.String())
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	artzip, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return "", nil
+		return nil
 	}
 
 	z, err := zip.NewReader(bytes.NewReader(artzip), int64(len(artzip)))
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	f, err := z.Open(file)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	defer f.Close()
-	b, err := io.ReadAll(f)
-	return string(b), err
+	return json.NewDecoder(f).Decode(detail.coverdetail)
 }
 
 type wfartifacts struct {
