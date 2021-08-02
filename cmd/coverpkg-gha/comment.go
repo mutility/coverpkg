@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -122,6 +123,11 @@ func doComment(ctx diag.Context, event *GitHubEvent, detail *details) (int64, er
 		comment, err = prcomment.edit(ctx, oldComment, body)
 	}
 	return comment.GetID(), err
+}
+
+func isForbidden(err error) bool {
+	var erresp *github.ErrorResponse
+	return errors.As(err, &erresp)
 }
 
 type issuecomments struct {

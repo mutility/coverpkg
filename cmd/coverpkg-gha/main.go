@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/urfave/cli/v2"
 
@@ -456,12 +455,10 @@ func runPR(c *cli.Context) error {
 	if id != 0 {
 		gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
 	}
-	if err != nil && strings.Contains(err.Error(), "403") {
-		fork := cfg.Repository != event.String(gha, "pull_request.head.repo.full_name")
-		if fork || cfg.Actor == "dependabot[bot]" {
-			gha.SetOutput("comment-failed", "true")
-			err = nil
-		}
+
+	if isForbidden(err) {
+		gha.SetOutput("comment-failed", "403")
+		err = nil
 	}
 	return err
 }
