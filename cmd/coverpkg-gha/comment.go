@@ -102,7 +102,7 @@ func doComment(ctx diag.Context, event *GitHubEvent, detail *details) (int64, er
 		client: github.NewClient(oauth2.NewClient(ctx, tok)),
 		owner:  event.String(ctx, "repository.owner.login"),
 		repo:   event.String(ctx, "repository.name"),
-		issue:  event.Int(ctx, "pull_request.number"),
+		issue:  detail.IssueNumber,
 	}
 
 	oldComment := prcomment.find(ctx)

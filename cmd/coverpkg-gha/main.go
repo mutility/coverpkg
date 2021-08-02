@@ -101,6 +101,7 @@ type details struct {
 	BasePct         float64
 	DeltaPct        float64
 	FoundBase       bool
+	IssueNumber     int
 }
 
 func main() {
@@ -451,6 +452,7 @@ func runPR(c *cli.Context) error {
 		}
 	}
 
+	detail.IssueNumber = event.Int(ctx, "pull_request.number")
 	id, err := doComment(ctx, event, &detail)
 	if id != 0 {
 		gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
@@ -490,12 +492,13 @@ func runArtifactComment(c *cli.Context) error {
 
 	summary, err := getArtifact(ctx, event, "coverpkg", "summary.md", detail)
 	if err == nil && summary != "" {
-		detail.BaseSHA = event.String(gha, "workflow_run.pull_request.base.sha")
-		detail.HeadSHA = event.String(gha, "workflow_run.pull_request.head.sha")
+		detail.BaseSHA = event.String(gha, "workflow_run.pull_requests.0.base.sha")
+		detail.HeadSHA = event.String(gha, "workflow_run.pull_requests.0.head.sha")
 		detail.MarkdownSummary = summary
 
 		gha.SetOutput("summary-md", summary)
 
+		detail.IssueNumber = event.Int(gha, "workflow_run.pull_requests.0.number")
 		id, err := doComment(ctx, event, &detail)
 		if id != 0 {
 			gha.SetOutput("comment-id", strconv.FormatInt(id, 10))

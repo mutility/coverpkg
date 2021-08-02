@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/mutility/diag"
@@ -250,6 +251,14 @@ func (ghe GitHubEvent) lookup(log diag.Interface, path string) interface{} {
 			}
 			diag.Warningf(log, "invalid event path %q (%s) in %T: %v", p, path, src, keys)
 			return nil
+		} else if v, ok := src.([]interface{}); ok {
+			i, err := strconv.Atoi(p)
+			if err != nil || i >= len(v) || i < 0 {
+				diag.Warningf(log, "invalid event path %q (%s) in %T: 0..%d", p, path, src, len(v))
+				return nil
+			}
+			src = v[i]
+			continue
 		}
 	}
 	return src
