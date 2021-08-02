@@ -17,7 +17,7 @@ import (
 	"github.com/mutility/diag"
 )
 
-func loadMeta(ctx diag.Context, event *GitHubEvent, name, file string, detail details) error {
+func loadMeta(ctx diag.Context, event *GitHubEvent, name, file string, detail *details) error {
 	tok := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: detail.APIToken})
 
 	artifacts := wfartifacts{
@@ -54,7 +54,7 @@ func loadMeta(ctx diag.Context, event *GitHubEvent, name, file string, detail de
 	}
 
 	defer f.Close()
-	return json.NewDecoder(f).Decode(detail.coverdetail)
+	return json.NewDecoder(f).Decode(&detail.coverdetail)
 }
 
 type wfartifacts struct {

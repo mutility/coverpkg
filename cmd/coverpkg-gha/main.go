@@ -502,7 +502,8 @@ func runArtifactComment(c *cli.Context) error {
 		return nil
 	}
 
-	err := loadMeta(ctx, event, "coverpkg", "meta.json", detail)
+	err := loadMeta(ctx, event, "coverpkg", "meta.json", &detail)
+	gha.Debugf("%+v", detail.coverdetail)
 	if err == nil {
 		gha.SetOutput("summary-md", detail.MarkdownSummary)
 
