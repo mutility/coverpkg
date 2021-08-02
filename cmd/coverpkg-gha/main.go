@@ -487,7 +487,7 @@ func runArtifactComment(c *cli.Context) error {
 
 	event := gha.Event(cfg.EventPath)
 	if ev := event.String(ctx, "workflow_run.event"); ev != "pull_request" {
-		diag.Error(ctx, "Unsupported workflow_run event:", ev)
+		diag.Warning(ctx, "Unsupported workflow_run event:", ev)
 		return nil
 	}
 
