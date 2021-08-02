@@ -54,6 +54,11 @@ outputs:
     description: Set to 'true' if a pull-request base coverage was found
   comment-id:
     description: Set to id of a posted or updated PR comment
+  comment-failed:
+    description: Set to 'true' if a comment could not be posted (typically a fork)
+  artifacts:
+    description: Directory of created artifacts
+
 
 runs:
   using: 'composite'
