@@ -40,6 +40,16 @@ func (gha *GitHubAction) Debugf(format string, a ...interface{}) {
 	fmt.Fprintf(gha.w, "::debug::%s\n", sprintf(format, a))
 }
 
+// Print emits regular output.
+func (gha *GitHubAction) Print(a ...interface{}) {
+	fmt.Fprintf(gha.w, "%s\n", sprint(a))
+}
+
+// Printf emits regular output.
+func (gha *GitHubAction) Printf(format string, a ...interface{}) {
+	fmt.Fprintf(gha.w, "%s\n", sprintf(format, a))
+}
+
 // Error emits an error message.
 func (gha *GitHubAction) Error(a ...interface{}) {
 	fmt.Fprintf(gha.w, "::error::%s\n", sprint(a))
@@ -78,6 +88,18 @@ func (gha *GitHubAction) WarningAt(file string, line, col int, a ...interface{})
 // WarningAtf emits an warning message at a position. Set line and column to 0 to omit.
 func (gha *GitHubAction) WarningAtf(file string, line, col int, format string, a ...interface{}) {
 	(&ghaPos{gha.w, file, line, col}).Warningf(format, a...)
+}
+
+// Group groups output in a GitHub actions log
+func (gha *GitHubAction) Group(title string, fn func(diag.Interface)) {
+	fmt.Fprintf(gha.w, "::group::%s\n", ghaUnsafe(title))
+	fn(gha)
+	fmt.Fprint(gha.w, "::endgroup::\n")
+}
+
+// MaskValue requests the GitHub actions log mask this value
+func (gha *GitHubAction) MaskValue(secret string) {
+	fmt.Fprintf(gha.w, "::add-mask::%s\n", ghaUnsafe(secret))
 }
 
 // SetOutput sets an output to the provided value.

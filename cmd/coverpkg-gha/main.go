@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 
@@ -31,6 +33,8 @@ type config struct {
 	GithubActions bool
 	// The name of the workflow.
 	Workflow string
+	// The name of the person or app that initiated the workflow
+	Actor string
 	// A unique number for each run within a repository. This number does not change if you re-run the workflow run.
 	RunID string
 	// The GitHub workspace directory path. The workspace directory is a copy of your repository if your workflow uses the actions/checkout action. If you don't use the actions/checkout action, the directory will be empty. For example, /home/runner/work/my-repo-name/my-repo-name.
@@ -74,6 +78,7 @@ type config struct {
 	NoPullCoverage bool            // Retrieve coverage details, unless true
 	CoverageRef    string          // Namespace for coverpkg notes
 	PRComment      string          // "", update, replace, or append
+	ArtifactPath   string          // Directory for artifacts; generate if unspecified.
 }
 
 func (cfg config) GitHubContext(c *cli.Context) (*GitHubAction, diag.Context) {
@@ -156,6 +161,7 @@ retrieved.`,
 		// reflects https://docs.github.com/en/actions/reference/environment-variables
 		Flags: []cli.Flag{
 			boolVar(&cfg.GithubActions, "github-actions", "specify if running as a github action", "CI", "GITHUB_ACTIONS"),
+			stringVar(&cfg.Actor, "actor", "specify who initiated the workflow", "GITHUB_ACTOR"),
 			stringVar(&cfg.Workflow, "workflow", "specify the workflow name", "GITHUB_WORKFLOW"),
 			stringVar(&cfg.RunID, "run-id", "specify the run-id, used to form run-url", "GITHUB_RUN_ID"),
 			pathVar(&cfg.Workspace, "workspace", "specify the workspace directory", "GITHUB_WORKSPACE"),
@@ -175,6 +181,8 @@ retrieved.`,
 			stringVar(&cfg.GroupBy, "group-by", "specify grouping level: file, package, root, or module", "INPUT_GROUPBY"),
 			stringSliceVar(&cfg.Excludes, "exclude", "list package path names to exclude", "INPUT_EXCLUDES"),
 			defaultText(stringSliceVar(&cfg.Packages, "package", "list packages to report on", "INPUT_PACKAGES"), "all root level"),
+
+			pathVar(&cfg.ArtifactPath, "artifacts", "specify artifact output directory"),
 		},
 
 		// form run-url from server-url, repository, and run-id, unless explicitly specified.
@@ -219,7 +227,6 @@ retrieved.`,
 					"release",
 					"status",
 					"watch",
-					"workflow_run",
 				},
 				Usage: "Does nothing; exits without an error for unsupported GitHub Action events.",
 				Action: func(c *cli.Context) error {
@@ -264,6 +271,17 @@ retrieved.`,
 					boolVar(&cfg.NoPullCoverage, "coverpkg-nopull", "skip pulling coverage", "INPUT_NOPULL"),
 					stringVar(&cfg.Remote, "coverpkg-remote", "specify an alternate remote name", "INPUT_REMOTE"),
 					stringVar(&cfg.CoverageRef, "coverpkg-ref", "specify an alternate notes ref name", "INPUT_COVERPKGREF"),
+					stringVar(&cfg.PRComment, "coverpkg-comment", "specify commenting: update, replace, or append", "INPUT_COMMENT"),
+				},
+			},
+			{
+				Name:   "workflow_run",
+				Before: requireEventPath,
+				Action: runArtifactComment,
+				Usage:  "comment on PRs from forks",
+
+				Flags: []cli.Flag{
+					stringVar(&cfg.APIToken, "api-token", "specify the token used for commenting on pull requests", "INPUT_TOKEN"),
 					stringVar(&cfg.PRComment, "coverpkg-comment", "specify commenting: update, replace, or append", "INPUT_COMMENT"),
 				},
 			},
@@ -412,15 +430,80 @@ func runPR(c *cli.Context) error {
 	detail.HeadPct = coverage.Percent(headcov)
 	detail.DeltaPct = detail.HeadPct - detail.BasePct
 
+	arts := cfg.ArtifactPath
+	if arts == "" {
+		arts, _ = os.MkdirTemp(os.TempDir(), "coverpkg")
+	}
+
 	detail.TextSummary = coverage.Report(diff)
-	gha.Debug(detail.TextSummary)
+	diag.Group(gha, "Coverage summary", func(gha diag.Interface) {
+		diag.Print(gha, detail.TextSummary)
+	})
 	gha.SetOutput("summary-txt", detail.TextSummary)
 	detail.MarkdownSummary = coverage.ReportMD(diff)
 	gha.SetOutput("summary-md", detail.MarkdownSummary)
+	if arts != "" {
+		err = os.WriteFile(filepath.Join(arts, "summary.txt"), []byte(detail.TextSummary), 0x644)
+		if err == nil {
+			os.WriteFile(filepath.Join(arts, "summary.md"), []byte(detail.MarkdownSummary), 0x644)
+		}
+		if err == nil {
+			gha.SetOutput("artifacts", arts)
+		}
+	}
 
 	id, err := doComment(ctx, event, &detail)
 	if id != 0 {
 		gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
+	}
+	if err != nil && strings.Contains(err.Error(), "403") {
+		fork := cfg.Repository != event.String(gha, "pull_request.head.repo.full_name")
+		if fork || cfg.Actor == "dependabot[bot]" {
+			gha.SetOutput("comment-failed", "true")
+			err = nil
+		}
+	}
+	return err
+}
+
+func runArtifactComment(c *cli.Context) error {
+	switch cfg.PRComment {
+	case "", "none", "append", "replace", "update":
+	default:
+		return errInvalidComment(cfg.PRComment)
+	}
+
+	gha, ctx := cfg.GitHubContext(c)
+	detail := details{config: &cfg}
+
+	gha.Group("Event "+cfg.EventPath, func(i diag.Interface) {
+		evt, err := os.ReadFile(cfg.EventPath)
+		if err == nil {
+			gha.Printf("%s\n", evt)
+		} else {
+			gha.Print(err)
+		}
+	})
+
+	event := gha.Event(cfg.EventPath)
+	if ev := event.String(ctx, "workflow_run.event"); ev != "pull_request" {
+		diag.Error(ctx, "Unsupported workflow_run event:", ev)
+		return nil
+	}
+
+	summary, err := getArtifact(ctx, event, "coverpkg", "summary.md", detail)
+	if err == nil && summary != "" {
+		detail.BaseSHA = event.String(gha, "workflow_run.pull_request.base.sha")
+		detail.HeadSHA = event.String(gha, "workflow_run.pull_request.head.sha")
+		detail.MarkdownSummary = summary
+
+		gha.SetOutput("summary-md", summary)
+
+		id, err := doComment(ctx, event, &detail)
+		if id != 0 {
+			gha.SetOutput("comment-id", strconv.FormatInt(id, 10))
+		}
+		return err
 	}
 	return err
 }

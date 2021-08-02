@@ -72,3 +72,47 @@ remote | `origin` | Override the git remote used for pushing and pulling
 coverpkgref | `coverpkg` | Override the notes namespace used for tracking coverage
 token | - | Provide to enable PR comments
 comment | `none` | Set to `append`, `replace`, or `update` to create, delete, and/or update a comment on a PR
+
+### Public forks
+
+PRs from public forks receive a token without enough privileges to create comments on PRs. This can be worked around with additional caveats by using `pull_request_target` instead of `pull_request`, but we cannot recommend this. Coverpkg is hoping for a better solution from GitHub.
+
+In the mean time, it such a situation it will not report an error, and will instead include the coverpkg output in action output. You can then use [workaround described by GitHub](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/) with the following workflow additions.
+
+#### After Calculate Coverage
+
+```yaml
+    - name: Store Coverage
+      id: coverpkg-artifact
+      if: ${{ outputs.coverpkg.comment-failed == true }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: coverpkg
+        path: ${{ outputs.coverpkg.artifacts }}/
+```
+
+#### In a new workflow
+
+```yaml
+name: Comment on the pull request
+
+on:
+  workflow_run:
+    # match the name of the other workflow here:
+    workflows: ["Coverage"]
+    types:
+      - completed
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    if: >
+      ${{ github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Coveage Comment
+        uses: mutility/coverpkg@v1
+        with:
+          comment: replace
+          from-artifacts: true
+```
