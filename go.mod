@@ -7,5 +7,5 @@ require (
 	github.com/google/go-github/v34 v34.0.0
 	github.com/mutility/diag v1.2.0
 	github.com/urfave/cli/v2 v2.25.7
-	golang.org/x/oauth2 v0.10.0
+	golang.org/x/oauth2 v0.11.0
 )
