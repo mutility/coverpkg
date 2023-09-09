@@ -30,13 +30,15 @@ func (gha *GitHubAction) At(file string, linecol ...int) *ghaPos {
 }
 
 // Debug emits a debug message. GitHub only shows these if you've set secret:
-//     ACTIONS_STEP_DEBUG=true
+//
+//	ACTIONS_STEP_DEBUG=true
 func (gha *GitHubAction) Debug(a ...interface{}) {
 	fmt.Fprintf(gha.w, "::debug::%s\n", sprint(a))
 }
 
 // Debugf emits a debug message. GitHub only shows these if you've set secret:
-//     ACTIONS_STEP_DEBUG=true
+//
+//	ACTIONS_STEP_DEBUG=true
 func (gha *GitHubAction) Debugf(format string, a ...interface{}) {
 	fmt.Fprintf(gha.w, "::debug::%s\n", sprintf(format, a))
 }
@@ -105,22 +107,32 @@ func (gha *GitHubAction) MaskValue(secret string) {
 
 // SetOutput sets an output to the provided value.
 func (gha *GitHubAction) SetOutput(name, value string) {
-	fmt.Fprintf(gha.w, "::set-output name=%s::%s\n", name, ghaUnsafe(value))
+	_, err := appendFilef(cfg.SetOutput, "%s=%s\n", name, ghaUnsafe(value))
+	switch err {
+	case nil:
+		return
+	case errEmptyPath:
+		gha.Error("GITHUB_OUTPUT not available")
+	default:
+		gha.Error(err)
+	}
 }
 
 // SetEnv sets an environment variable for future actions.
 func (gha *GitHubAction) SetEnv(name, value string) {
-	f, err := os.OpenFile(cfg.SetEnv, os.O_APPEND, 0)
-	if err != nil {
-		gha.Error(err)
-		return
-	}
+	format := "%s=%s\n"
 	if strings.ContainsRune(value, '\n') {
-		fmt.Fprintf(f, "%s=<<END_%[1]s\n%s<<END_%[1]s\n", name, value)
-	} else {
-		fmt.Fprintf(f, "%s=%s\n", name, value)
+		format = "%s=<<END_%[1]s\n%s\nEND_%[1]s\n"
 	}
-	f.Close()
+	_, err := appendFilef(cfg.SetEnv, format, name, value)
+	switch err {
+	case nil:
+		return
+	case errEmptyPath:
+		gha.Error("GITHUB_ENV not available")
+	default:
+		gha.Error(err)
+	}
 }
 
 // AddPath sets a path for future actions.
@@ -262,4 +274,16 @@ func (ghe GitHubEvent) lookup(log diag.Interface, path string) interface{} {
 		}
 	}
 	return src
+}
+
+func appendFilef(path string, format string, a ...any) (int, error) {
+	if path == "" {
+		return 0, errEmptyPath
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o666)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	return fmt.Fprintf(f, format, a...)
 }
