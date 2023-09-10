@@ -28,6 +28,12 @@ func (e errInvalidComment) Error() string {
 	return fmt.Sprintf("comment value '%s'; must be none, append, replace, or update", string(e))
 }
 
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
+const errEmptyPath = errString("no path")
+
 type config struct {
 	// Always set to true when GitHub Actions is running the workflow. You can use this variable to differentiate when tests are being run locally or by GitHub Actions.
 	GithubActions bool `json:"-"`
@@ -62,6 +68,8 @@ type config struct {
 
 	// File that receives environment variables to be set for future actions
 	SetEnv string `json:"-"`
+	// File that receives output values to be available to future actions
+	SetOutput string `json:"-"`
 	// File that receives path additions to be set for future actions
 	SetPath string `json:"-"`
 
@@ -176,7 +184,8 @@ retrieved.`,
 			hide(stringVar(&cfg.GraphQLURL, "graphql-url", "specify the graphql endpoint, could be used for making comments", "GITHUB_GRAPHQL_URL")),
 			defaultText(stringVar(&cfg.RunURL, "run-url", "specify url to view this run"), "calculated"),
 
-			pathVar(&cfg.SetEnv, "env", "specify env file"),
+			pathVar(&cfg.SetEnv, "env", "specify env file", "GITHUB_ENV"),
+			pathVar(&cfg.SetOutput, "outputs", "specify outputs file", "GITHUB_OUTPUT"),
 			pathVar(&cfg.SetPath, "path", "specify path file"),
 
 			stringVar(&cfg.GroupBy, "group-by", "specify grouping level: file, package, root, or module", "INPUT_GROUPBY"),
@@ -306,7 +315,8 @@ func requireEventPath(*cli.Context) error {
 func groupBy(ctx diag.Context, by string, filecov coverage.FileData) (interface {
 	coverage.EachPather
 	coverage.PathDetailer
-}, error) {
+}, error,
+) {
 	switch by {
 	case "file":
 		return filecov, nil
