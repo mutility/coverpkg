@@ -42,7 +42,7 @@ func Notes(ctx diag.Context, args ...string) (string, error) {
 
 func run(ctx diag.Context, args ...string) (string, error) {
 	if ctx != nil {
-		iargs := make([]interface{}, 1+len(args))
+		iargs := make([]any, 1+len(args))
 		for i := range args {
 			iargs[i+1] = args[i]
 		}

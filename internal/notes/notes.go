@@ -33,7 +33,7 @@ func Push(ctx diag.Context, r RemoteRef) error {
 
 // Store saves data against the head commit, copying it or encoding as JSON.
 // Note that copied data should be clear next, but this is not enforced here.
-func Store(ctx diag.Context, r RemoteRef, data interface{}) error {
+func Store(ctx diag.Context, r RemoteRef, data any) error {
 	if git.IsDirty(ctx) {
 		return errors.New("workspace is dirty")
 	}
@@ -66,7 +66,7 @@ func Store(ctx diag.Context, r RemoteRef, data interface{}) error {
 }
 
 // Load attempts to retrieve notes from commit into data, copying or decoding as JSON.
-func Load(ctx diag.Context, r RemoteRef, commit string, data interface{}) error {
+func Load(ctx diag.Context, r RemoteRef, commit string, data any) error {
 	buf, err := git.Notes(ctx, "--ref", r.Ref, "show", commit)
 	if err != nil {
 		return err

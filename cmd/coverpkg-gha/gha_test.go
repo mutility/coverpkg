@@ -9,7 +9,7 @@ import (
 )
 
 func TestFullDiagInterface(t *testing.T) {
-	var impl interface{} = (*GitHubAction)(nil)
+	var impl any = (*GitHubAction)(nil)
 	if _, ok := impl.(diag.FullInterface); !ok {
 		t.Error("myimpl doesn't implement diag.FullInterface")
 	}
