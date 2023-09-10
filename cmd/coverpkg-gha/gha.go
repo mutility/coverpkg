@@ -137,13 +137,15 @@ func (gha *GitHubAction) SetEnv(name, value string) {
 
 // AddPath sets a path for future actions.
 func (gha *GitHubAction) AddPath(path string) {
-	f, err := os.OpenFile(cfg.SetEnv, os.O_APPEND, 0)
-	if err != nil {
-		gha.Error(err)
+	_, err := appendFilef(cfg.SetPath, "%s\n", path)
+	switch err {
+	case nil:
 		return
+	case errEmptyPath:
+		gha.Error("GITHUB_PATH not available")
+	default:
+		gha.Error(err)
 	}
-	fmt.Fprintln(f, path)
-	f.Close()
 }
 
 func (gha *GitHubAction) Event(path string) *GitHubEvent {
