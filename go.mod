@@ -6,7 +6,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-github/v34 v34.0.0
 	github.com/mutility/diag v1.2.0
-	github.com/urfave/cli/v2 v2.26.0
+	github.com/urfave/cli/v2 v2.27.0
 	golang.org/x/oauth2 v0.15.0
 )
 
