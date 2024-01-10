@@ -11,17 +11,14 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/google/go-github/v34/github"
-	"golang.org/x/oauth2"
+	"github.com/google/go-github/v57/github"
 
 	"github.com/mutility/diag"
 )
 
 func loadMeta(ctx diag.Context, event *GitHubEvent, name, file string, detail *details) error {
-	tok := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: detail.APIToken})
-
 	artifacts := wfartifacts{
-		client: github.NewClient(oauth2.NewClient(ctx, tok)),
+		client: github.NewClient(nil).WithAuthToken(detail.APIToken),
 		owner:  event.String(ctx, "repository.owner.login"),
 		repo:   event.String(ctx, "repository.name"),
 	}
@@ -83,7 +80,7 @@ func (a *wfartifacts) find(ctx diag.Context, runID int64, name string) *github.A
 }
 
 func (a *wfartifacts) download(ctx diag.Context, art *github.Artifact) *url.URL {
-	url, _, err := a.client.Actions.DownloadArtifact(ctx, a.owner, a.repo, art.GetID(), true)
+	url, _, err := a.client.Actions.DownloadArtifact(ctx, a.owner, a.repo, art.GetID(), 5)
 	if err != nil {
 		diag.Warning(ctx, "sourcing artifact:", err)
 		return nil
@@ -97,9 +94,8 @@ func doComment(ctx diag.Context, event *GitHubEvent, detail *details) (int64, er
 		return 0, nil
 	}
 
-	tok := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: detail.APIToken})
 	prcomment := issuecomments{
-		client: github.NewClient(oauth2.NewClient(ctx, tok)),
+		client: github.NewClient(nil).WithAuthToken(detail.APIToken),
 		owner:  event.String(ctx, "repository.owner.login"),
 		repo:   event.String(ctx, "repository.name"),
 		issue:  detail.IssueNumber,
